@@ -65,6 +65,8 @@ export const MemberCard: React.FC<MemberCardProps> = ({
             src={displayImage}
             alt={member.name}
             onError={() => setImageError(true)}
+            referrerPolicy="no-referrer"
+            loading="lazy"
             className="w-12 h-12 rounded-full object-cover border-2 border-[var(--line)] group-hover:border-[var(--accent)] transition-colors shadow-xs"
           />
         ) : (

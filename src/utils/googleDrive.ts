@@ -40,3 +40,46 @@ export function isValidHttpUrl(string: string): boolean {
     return false;
   }
 }
+
+export type PhotoLinkStatus = 'empty' | 'invalid' | 'google_photos' | 'drive_no_id' | 'ok';
+
+/**
+ * Memeriksa status validitas tautan foto profil anggota
+ */
+export function getPhotoLinkStatus(url?: string | null): PhotoLinkStatus {
+  if (!url || typeof url !== 'string' || url.trim() === '') {
+    return 'empty';
+  }
+
+  const trimmed = url.trim();
+  if (!isValidHttpUrl(trimmed)) {
+    return 'invalid';
+  }
+
+  try {
+    const parsed = new URL(trimmed);
+    const host = parsed.hostname.toLowerCase();
+
+    // Host photos.app.goo.gl, photos.google.com/share, atau photos.google.com
+    if (
+      host === 'photos.app.goo.gl' ||
+      host === 'photos.google.com' ||
+      host.endsWith('.photos.google.com') ||
+      trimmed.toLowerCase().includes('photos.google.com/share')
+    ) {
+      return 'google_photos';
+    }
+
+    // Host drive.google.com tapi id file tidak terdeteksi
+    if (host === 'drive.google.com' || host.endsWith('.drive.google.com')) {
+      const driveId = extractGoogleDriveId(trimmed);
+      if (!driveId) {
+        return 'drive_no_id';
+      }
+    }
+  } catch {
+    return 'invalid';
+  }
+
+  return 'ok';
+}

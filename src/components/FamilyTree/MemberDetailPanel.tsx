@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Member } from '../../types';
 import { getDisplayImageUrl } from '../../utils/googleDrive';
 import {
@@ -43,7 +43,12 @@ export const MemberDetailPanel: React.FC<MemberDetailPanelProps> = ({
   childrenCount,
 }) => {
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [imageError, setImageError] = useState(false);
   const displayImage = member.avatarUrl ? getDisplayImageUrl(member.avatarUrl) : '';
+
+  useEffect(() => {
+    setImageError(false);
+  }, [member.id, member.avatarUrl]);
 
   // Formatter for date
   const formatDate = (dateStr?: string | null) => {
@@ -78,10 +83,13 @@ export const MemberDetailPanel: React.FC<MemberDetailPanelProps> = ({
         {/* Left: Avatar & Basic Headline */}
         <div className="flex items-center gap-4">
           <div className="relative">
-            {displayImage ? (
+            {displayImage && !imageError ? (
               <img
                 src={displayImage}
                 alt={member.name}
+                onError={() => setImageError(true)}
+                referrerPolicy="no-referrer"
+                loading="lazy"
                 className="w-16 h-16 sm:w-20 sm:h-20 rounded-2xl object-cover border-2 border-[var(--accent)] shadow-sm"
               />
             ) : (

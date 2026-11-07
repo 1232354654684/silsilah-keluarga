@@ -323,6 +323,104 @@ function MainApp() {
     );
   };
 
+  const handleImportMembers = async (
+    newMembers: Member[],
+    mode: 'append' | 'replace',
+    fileName: string,
+    onProgress: (p: { stage: string; current: number; total: number; percent: number }) => void
+  ) => {
+    if (!isAdmin) {
+      throw new Error('Hanya pengguna dengan hak akses admin yang diizinkan mengimpor data.');
+    }
+
+    const BATCH_SIZE = 400; // aman di bawah batas 500 operasi Firestore
+
+    let deletedCount = 0;
+    let savedCount = 0;
+
+    // 1. Jika mode 'replace', hapus semua anggota yang ada saat ini
+    if (mode === 'replace' && members.length > 0) {
+      const totalToDelete = members.length;
+      for (let i = 0; i < totalToDelete; i += BATCH_SIZE) {
+        const chunk = members.slice(i, i + BATCH_SIZE);
+        const batch = writeBatch(db);
+        chunk.forEach((m) => {
+          batch.delete(doc(db, 'members', m.id));
+        });
+        await batch.commit();
+        deletedCount += chunk.length;
+        onProgress({
+          stage: `Menghapus data lama (${deletedCount}/${totalToDelete})...`,
+          current: deletedCount,
+          total: totalToDelete + newMembers.length,
+          percent: Math.round((deletedCount / (totalToDelete + newMembers.length)) * 50),
+        });
+      }
+    }
+
+    // 2. Simpan anggota baru dalam batch
+    const totalToSave = newMembers.length;
+    for (let i = 0; i < totalToSave; i += BATCH_SIZE) {
+      const chunk = newMembers.slice(i, i + BATCH_SIZE);
+      const batch = writeBatch(db);
+      chunk.forEach((m) => {
+        const cleaned = cleanMemberData({
+          ...m,
+          updatedAt: new Date().toISOString(),
+          updatedBy: adminProfile?.name || currentUser?.email || 'Admin',
+        });
+        batch.set(doc(db, 'members', m.id), cleaned);
+      });
+
+      try {
+        await batch.commit();
+        savedCount += chunk.length;
+        const progressPercent =
+          mode === 'replace'
+            ? 50 + Math.round((savedCount / totalToSave) * 50)
+            : Math.round((savedCount / totalToSave) * 100);
+
+        onProgress({
+          stage: `Menyimpan data anggota (${savedCount}/${totalToSave})...`,
+          current: savedCount,
+          total: totalToSave,
+          percent: Math.min(progressPercent, 100),
+        });
+      } catch (err: any) {
+        throw new Error(
+          `Terjadi kesalahan saat menyimpan batch dokumen (${savedCount} dari ${totalToSave} berhasil tersimpan): ${
+            err?.message || 'Gagal commit batch'
+          }`
+        );
+      }
+    }
+
+    // 3. Catat riwayat audit
+    const modeLabel = mode === 'replace' ? 'Ganti Semua' : 'Tambahkan ke Data Lama';
+    await logAuditAction(
+      'tree_change',
+      'IMPORT_EXCEL',
+      `Mengimpor ${savedCount} anggota dari file "${fileName}" (mode: ${modeLabel})`
+    );
+
+    // 4. Toast sukses
+    setToast({
+      type: 'success',
+      message: `Berhasil mengimpor ${savedCount} anggota keluarga dari file "${fileName}"!`,
+    });
+    setTimeout(() => setToast(null), 5000);
+
+    // 5. Arahkan fokus ke pohon keluarga
+    if (newMembers.length > 0) {
+      const rootOrFirst = newMembers.find((m) => !m.parentId) || newMembers[0];
+      if (rootOrFirst) {
+        setFocusedMemberId(rootOrFirst.id);
+      }
+      setActiveTab('tree');
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+  };
+
   // NEWS ACTIONS
   const handleSaveNews = async (newsData: Partial<NewsItem>) => {
     const isEdit = !!newsToEdit;
@@ -586,6 +684,7 @@ function MainApp() {
             onToggleAdminStatus={handleToggleAdminStatus}
             onDeleteAdmin={handleDeleteAdmin}
             onResetAdminPassword={handleResetAdminPassword}
+            onImportMembers={handleImportMembers}
           />
         )}
       </main>

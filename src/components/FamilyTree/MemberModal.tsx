@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Member, Gender } from '../../types';
-import { X, Upload, HelpCircle, Eye, EyeOff, Image as ImageIcon, CheckCircle2 } from 'lucide-react';
-import { getDisplayImageUrl } from '../../utils/googleDrive';
+import { X, Upload, HelpCircle, Eye, EyeOff, Image as ImageIcon, CheckCircle2, AlertCircle } from 'lucide-react';
+import { getDisplayImageUrl, getPhotoLinkStatus } from '../../utils/googleDrive';
 
 interface MemberModalProps {
   isOpen: boolean;
@@ -37,6 +37,7 @@ export const MemberModal: React.FC<MemberModalProps> = ({
   const [error, setError] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [imageLoadFailed, setImageLoadFailed] = useState(false);
 
   // Find all descendants of memberToEdit to prevent cyclic loops
   const forbiddenParentIds = new Set<string>();
@@ -85,6 +86,7 @@ export const MemberModal: React.FC<MemberModalProps> = ({
     }
     setError(null);
     setSuccessMsg(null);
+    setImageLoadFailed(false);
   }, [memberToEdit, defaultParentId, isOpen]);
 
   if (!isOpen) return null;
@@ -141,6 +143,7 @@ export const MemberModal: React.FC<MemberModalProps> = ({
   };
 
   const previewAvatar = avatarUrl ? getDisplayImageUrl(avatarUrl) : '';
+  const photoStatus = getPhotoLinkStatus(avatarUrl);
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs overflow-y-auto">
@@ -353,24 +356,70 @@ export const MemberModal: React.FC<MemberModalProps> = ({
               <input
                 type="url"
                 value={avatarUrl}
-                onChange={(e) => setAvatarUrl(e.target.value)}
+                onChange={(e) => {
+                  setAvatarUrl(e.target.value);
+                  setImageLoadFailed(false);
+                }}
                 placeholder="https://drive.google.com/file/d/... atau https://..."
                 className="flex-1 px-3 py-2 rounded-lg border border-[var(--line)] bg-[var(--bg)] text-sm focus:border-[var(--accent)] focus:outline-none"
               />
               {previewAvatar && (
-                <div className="w-10 h-10 rounded-lg overflow-hidden border border-[var(--line)] shrink-0 bg-stone-100">
+                <div className="w-10 h-10 rounded-lg overflow-hidden border border-[var(--line)] shrink-0 bg-stone-100 dark:bg-stone-800 flex items-center justify-center">
                   <img
                     src={previewAvatar}
                     alt="Preview"
+                    referrerPolicy="no-referrer"
+                    loading="lazy"
                     className="w-full h-full object-cover"
-                    onError={() => {}}
+                    onError={() => setImageLoadFailed(true)}
+                    onLoad={() => setImageLoadFailed(false)}
                   />
                 </div>
               )}
             </div>
-            <p className="text-[11px] text-[var(--mute)] mt-1">
-              Mendukung link share Google Drive publik (folder foto/file foto) atau URL gambar web langsung.
+
+            {/* Teks bantuan di bawah input */}
+            <p className="text-[11px] text-[var(--mute)] mt-1.5 leading-relaxed">
+              Di Google Drive: klik kanan foto &gt; Bagikan &gt; ubah akses ke &apos;Siapa saja yang memiliki link&apos; &gt; Salin link.
             </p>
+
+            {/* Pesan status validasi link foto */}
+            {photoStatus === 'google_photos' && (
+              <div className="mt-2 p-2.5 rounded-lg bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-900/50 text-xs text-amber-800 dark:text-amber-200 flex items-start gap-2">
+                <AlertCircle className="w-4 h-4 shrink-0 mt-0.5 text-amber-600 dark:text-amber-400" />
+                <span>
+                  Link Google Photos tidak bisa tampil sebagai gambar. Unggah foto ke Google Drive lalu salin link-nya, atau gunakan alamat gambar langsung.
+                </span>
+              </div>
+            )}
+
+            {photoStatus === 'drive_no_id' && (
+              <div className="mt-2 p-2.5 rounded-lg bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-900/50 text-xs text-amber-800 dark:text-amber-200 flex items-start gap-2">
+                <AlertCircle className="w-4 h-4 shrink-0 mt-0.5 text-amber-600 dark:text-amber-400" />
+                <span>
+                  Link Google Drive tidak memuat ID file yang dikenali. Pastikan link diperoleh dari menu &apos;Bagikan&apos; &gt; &apos;Salin link&apos;.
+                </span>
+              </div>
+            )}
+
+            {photoStatus === 'invalid' && (
+              <div className="mt-2 p-2.5 rounded-lg bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-900/50 text-xs text-rose-700 dark:text-rose-300 flex items-start gap-2">
+                <AlertCircle className="w-4 h-4 shrink-0 mt-0.5 text-rose-600 dark:text-rose-400" />
+                <span>
+                  Format link tidak valid. Pastikan link diawali dengan http:// atau https://.
+                </span>
+              </div>
+            )}
+
+            {/* Pesan jika preview gambar gagal dimuat (onError) */}
+            {imageLoadFailed && (
+              <div className="mt-2 p-2.5 rounded-lg bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-900/50 text-xs text-amber-800 dark:text-amber-200 flex items-start gap-2">
+                <AlertCircle className="w-4 h-4 shrink-0 mt-0.5 text-amber-600 dark:text-amber-400" />
+                <span>
+                  Foto tidak bisa dimuat. Pastikan akses file di Drive diatur &apos;Siapa saja yang memiliki link&apos;.
+                </span>
+              </div>
+            )}
           </div>
 
           {/* Alamat */}

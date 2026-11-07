@@ -31,8 +31,52 @@ import {
   Copy,
   Check,
   EyeOff,
+  Upload,
 } from 'lucide-react';
 import { exportMembersToCSV } from '../../utils/export';
+import { downloadMemberTemplate, exportMembersToExcel } from '../../utils/excelTemplate';
+import { ImportMembersModal } from './ImportMembersModal';
+import { getDisplayImageUrl } from '../../utils/googleDrive';
+
+const MemberAvatarThumbnail: React.FC<{ member: Member }> = ({ member }) => {
+  const [imgErr, setImgErr] = useState(false);
+  const url = member.avatarUrl ? getDisplayImageUrl(member.avatarUrl) : '';
+
+  if (url && !imgErr) {
+    return (
+      <img
+        src={url}
+        alt={member.name}
+        onError={() => setImgErr(true)}
+        referrerPolicy="no-referrer"
+        loading="lazy"
+        className="w-7 h-7 rounded-full object-cover shrink-0 border border-[var(--line)] shadow-2xs"
+      />
+    );
+  }
+
+  const initials =
+    member.name
+      .split(' ')
+      .slice(0, 2)
+      .map((n) => n[0])
+      .join('')
+      .toUpperCase() || '?';
+
+  return (
+    <div
+      className={`w-7 h-7 rounded-full flex items-center justify-center font-bold text-[10px] shrink-0 border border-[var(--line)] shadow-2xs ${
+        member.gender === 'female'
+          ? 'bg-rose-100 dark:bg-rose-950/40 text-rose-700 dark:text-rose-300'
+          : member.gender === 'male'
+          ? 'bg-blue-100 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300'
+          : 'bg-emerald-100 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300'
+      }`}
+    >
+      {initials}
+    </div>
+  );
+};
 
 interface AdminDashboardProps {
   members: Member[];
@@ -51,6 +95,12 @@ interface AdminDashboardProps {
   onToggleAdminStatus: (uid: string, currentStatus: string) => Promise<void>;
   onDeleteAdmin: (uid: string) => Promise<void>;
   onResetAdminPassword: (email: string) => Promise<void>;
+  onImportMembers: (
+    newMembers: Member[],
+    mode: 'append' | 'replace',
+    fileName: string,
+    onProgress: (p: { stage: string; current: number; total: number; percent: number }) => void
+  ) => Promise<void>;
 }
 
 export const AdminDashboard: React.FC<AdminDashboardProps> = ({
@@ -70,11 +120,13 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   onToggleAdminStatus,
   onDeleteAdmin,
   onResetAdminPassword,
+  onImportMembers,
 }) => {
   const { currentUser, adminProfile, isSuperAdmin, changeMyPassword, logAuditAction } = useAuth();
   const [subTab, setSubTab] = useState<'members' | 'users' | 'audit' | 'password'>('members');
   const [memberSearch, setMemberSearch] = useState('');
   const [userActionMsg, setUserActionMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+  const [isImportModalOpen, setIsImportModalOpen] = useState(false);
 
   // Password state in admin dashboard
   const [newPass, setNewPass] = useState('');
@@ -197,6 +249,36 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     exportMembersToCSV(members);
   };
 
+  const handleDownloadTemplate = () => {
+    try {
+      downloadMemberTemplate();
+      setUserActionMsg({
+        type: 'success',
+        text: 'Template Excel silsilah keluarga berhasil diunduh.',
+      });
+    } catch (err: any) {
+      setUserActionMsg({
+        type: 'error',
+        text: err?.message || 'Gagal mengunduh template Excel.',
+      });
+    }
+  };
+
+  const handleExportExcel = () => {
+    try {
+      exportMembersToExcel(members);
+      setUserActionMsg({
+        type: 'success',
+        text: `Data ${members.length} anggota keluarga berhasil diekspor ke Excel (.xlsx).`,
+      });
+    } catch (err: any) {
+      setUserActionMsg({
+        type: 'error',
+        text: err?.message || 'Gagal mengekspor data anggota ke Excel.',
+      });
+    }
+  };
+
   const handleToggleStatus = async (uid: string, currentStatus: string) => {
     try {
       setUserActionMsg(null);
@@ -316,14 +398,40 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
           </button>
         </div>
 
-        <button
-          onClick={handleExportCSV}
-          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-[var(--line)] bg-[var(--surface)] text-[var(--ink)] hover:border-[var(--accent)] text-xs sm:text-sm font-medium transition-colors cursor-pointer"
-          title="Ekspor seluruh data anggota ke format CSV / Excel"
-        >
-          <FileSpreadsheet className="w-4 h-4 text-emerald-600" />
-          Ekspor CSV (Excel)
-        </button>
+        <div className="flex flex-wrap items-center gap-2">
+          <button
+            onClick={() => setIsImportModalOpen(true)}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-blue-600/40 bg-blue-50 dark:bg-blue-950/30 text-blue-700 dark:text-blue-300 hover:bg-blue-100 dark:hover:bg-blue-950/50 text-xs sm:text-sm font-semibold transition-colors cursor-pointer shadow-2xs"
+            title="Import data anggota dari file Excel (.xlsx / .xls / .csv)"
+          >
+            <Upload className="w-4 h-4 text-blue-600 dark:text-blue-400" />
+            Import dari Excel
+          </button>
+          <button
+            onClick={handleDownloadTemplate}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-[var(--line)] bg-[var(--surface)] text-[var(--ink)] hover:border-[var(--accent)] hover:text-[var(--accent)] text-xs sm:text-sm font-medium transition-colors cursor-pointer"
+            title="Unduh format template Excel untuk silsilah keluarga"
+          >
+            <Download className="w-4 h-4 text-blue-600 dark:text-blue-400" />
+            Unduh Template Excel
+          </button>
+          <button
+            onClick={handleExportExcel}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-emerald-600/40 bg-emerald-50 dark:bg-emerald-950/30 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-100 dark:hover:bg-emerald-950/50 text-xs sm:text-sm font-semibold transition-colors cursor-pointer shadow-2xs"
+            title="Ekspor seluruh data anggota ke format file Excel (.xlsx)"
+          >
+            <FileSpreadsheet className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
+            Ekspor Data ke Excel (.xlsx)
+          </button>
+          <button
+            onClick={handleExportCSV}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-[var(--line)] bg-[var(--surface)] text-[var(--ink)] hover:border-[var(--accent)] text-xs sm:text-sm font-medium transition-colors cursor-pointer"
+            title="Ekspor seluruh data anggota ke format CSV"
+          >
+            <FileSpreadsheet className="w-4 h-4 text-emerald-600" />
+            Ekspor CSV (Excel)
+          </button>
+        </div>
       </div>
 
       {/* Admin Tabs */}
@@ -433,13 +541,16 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                   return (
                     <tr key={m.id} className="hover:bg-[var(--surface-secondary)]/50 transition-colors">
                       <td className="py-3 px-3 font-medium text-[var(--ink)]">
-                        <div className="flex items-center gap-2">
-                          <span>{m.name}</span>
-                          {m.isDeceased && (
-                            <span className="text-[10px] px-1.5 py-0.2 rounded bg-stone-700 text-stone-200">
-                              Wafat
-                            </span>
-                          )}
+                        <div className="flex items-center gap-2.5">
+                          <MemberAvatarThumbnail member={m} />
+                          <div className="flex items-center gap-2">
+                            <span>{m.name}</span>
+                            {m.isDeceased && (
+                              <span className="text-[10px] px-1.5 py-0.2 rounded bg-stone-700 text-stone-200">
+                                Wafat
+                              </span>
+                            )}
+                          </div>
                         </div>
                       </td>
                       <td className="py-3 px-3 text-[var(--mute)]">
@@ -825,6 +936,16 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
             </div>
           </form>
         </div>
+      )}
+
+      {isImportModalOpen && (
+        <ImportMembersModal
+          isOpen={isImportModalOpen}
+          onClose={() => setIsImportModalOpen(false)}
+          existingMembers={members}
+          currentAdminName={adminProfile?.name || currentUser?.email || 'Admin'}
+          onImportSuccess={onImportMembers}
+        />
       )}
     </div>
   );
