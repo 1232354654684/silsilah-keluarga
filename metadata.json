@@ -1,0 +1,6 @@
+{
+  "name": "Silsilah Keluarga",
+  "description": "Aplikasi web silsilah keluarga modern, responsif, dan interaktif dengan pohon keluarga multi-generasi, dokumentasi, dan berita kegiatan.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

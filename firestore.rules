@@ -1,0 +1,117 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Default deny all
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Helper functions
+    function isValidId(id) {
+      return id is string && id.size() > 0 && id.size() <= 128;
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isBootstrappedAdmin() {
+      return isSignedIn() && (
+        request.auth.token.email == 'admin@silsilah.app' ||
+        request.auth.token.email == 'ardiansyahroni017@gmail.com'
+      );
+    }
+
+    function getAdminDoc() {
+      return get(/databases/$(database)/documents/admins/$(request.auth.uid));
+    }
+
+    function isAdmin() {
+      return isBootstrappedAdmin() || (
+        isSignedIn() && 
+        exists(/databases/$(database)/documents/admins/$(request.auth.uid)) &&
+        getAdminDoc().data.status == 'active'
+      );
+    }
+
+    function isSuperAdmin() {
+      return isBootstrappedAdmin() || (
+        isAdmin() && 
+        getAdminDoc().data.role == 'superadmin'
+      );
+    }
+
+    // Validation helpers
+    function isValidMember(data) {
+      return data.id is string && data.id.size() <= 128 &&
+             data.name is string && data.name.size() > 0 && data.name.size() <= 150;
+    }
+
+    function isValidNews(data) {
+      return data.id is string && data.id.size() <= 128 &&
+             data.title is string && data.title.size() > 0 && data.title.size() <= 200 &&
+             data.body is string && data.body.size() > 0 && data.body.size() <= 50000;
+    }
+
+    function isValidDoc(data) {
+      return data.id is string && data.id.size() <= 128 &&
+             data.title is string && data.title.size() > 0 && data.title.size() <= 200 &&
+             data.url is string && data.url.size() >= 8 && data.url.size() <= 1000;
+    }
+
+    // MEMBERS: Public read, admin write
+    match /members/{memberId} {
+      allow get, list: if true;
+      allow create: if isValidId(memberId) && isAdmin() && isValidMember(incoming());
+      allow update: if isValidId(memberId) && isAdmin() && isValidMember(incoming());
+      allow delete: if isValidId(memberId) && isAdmin();
+    }
+
+    // NEWS: Public read, admin write
+    match /news/{newsId} {
+      allow get, list: if true;
+      allow create: if isValidId(newsId) && isAdmin() && isValidNews(incoming());
+      allow update: if isValidId(newsId) && isAdmin() && isValidNews(incoming());
+      allow delete: if isValidId(newsId) && isAdmin();
+    }
+
+    // DOCS: Public read, admin write
+    match /docs/{docId} {
+      allow get, list: if true;
+      allow create: if isValidId(docId) && isAdmin() && isValidDoc(incoming());
+      allow update: if isValidId(docId) && isAdmin() && isValidDoc(incoming());
+      allow delete: if isValidId(docId) && isAdmin();
+    }
+
+    // ADMINS: Read by admin or own profile, write by Superadmin or own profile
+    match /admins/{adminId} {
+      allow get, list: if isBootstrappedAdmin() || (isSignedIn() && (request.auth.uid == adminId || isAdmin()));
+      allow create: if isSuperAdmin() || (isBootstrappedAdmin() && request.auth.uid == adminId);
+      allow update: if isSuperAdmin() || (isSignedIn() && request.auth.uid == adminId);
+      allow delete: if isSuperAdmin();
+    }
+
+    // USERNAMES mapping: Public read for login mapping, write by Admin
+    match /usernames/{username} {
+      allow get, list: if true;
+      allow create, update: if isAdmin();
+      allow delete: if isSuperAdmin();
+    }
+
+    // AUDIT LOGS: Read by admin, create by admin, delete never
+    match /audit_logs/{logId} {
+      allow get, list: if isAdmin();
+      allow create: if isValidId(logId) && isAdmin();
+      allow update, delete: if false;
+    }
+  }
+}

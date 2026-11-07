@@ -1,0 +1,129 @@
+{
+  "entities": {
+    "Member": {
+      "title": "Member",
+      "description": "Anggota dalam pohon silsilah keluarga",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "ID unik anggota" },
+        "name": { "type": "string", "description": "Nama lengkap anggota keluarga" },
+        "birthPlace": { "type": "string", "description": "Tempat lahir" },
+        "birthDate": { "type": "string", "description": "Tanggal lahir format YYYY-MM-DD" },
+        "isDeceased": { "type": "boolean", "description": "Status sudah meninggal dunia atau belum" },
+        "deathDate": { "type": "string", "description": "Tanggal wafat jika telah meninggal" },
+        "address": { "type": "string", "description": "Alamat tempat tinggal" },
+        "spouse": { "type": "string", "description": "Nama pasangan hidup" },
+        "spouseMemberId": { "type": "string", "description": "ID anggota yang menjadi pasangan jika terhubung" },
+        "parentId": { "type": "string", "description": "ID orang tua dalam hierarki" },
+        "gender": { "type": "string", "description": "Jenis kelamin: male, female, other" },
+        "avatarUrl": { "type": "string", "description": "Tautan foto profil Google Drive atau URL langsung" },
+        "notes": { "type": "string", "description": "Catatan biografis tambahan" },
+        "hideAddressAndBirth": { "type": "boolean", "description": "Privasi: sembunyikan alamat dan tanggal lahir dari publik" },
+        "updatedAt": { "type": "string", "description": "Waktu pembaruan terakhir ISO string" },
+        "updatedBy": { "type": "string", "description": "Email atau UID pengubah terakhir" }
+      },
+      "required": ["id", "name"]
+    },
+    "News": {
+      "title": "News",
+      "description": "Artikel berita dan pengumuman kegiatan keluarga",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "ID unik berita" },
+        "title": { "type": "string", "description": "Judul berita" },
+        "date": { "type": "string", "description": "Tanggal kegiatan / rilis" },
+        "body": { "type": "string", "description": "Isi berita dengan dukungan paragraf baru" },
+        "url": { "type": "string", "description": "Tautan Google Drive opsional" },
+        "createdAt": { "type": "string", "description": "Waktu pembuatan" },
+        "updatedAt": { "type": "string", "description": "Waktu perubahan terakhir" },
+        "createdBy": { "type": "string", "description": "Email pembuat" }
+      },
+      "required": ["id", "title", "body"]
+    },
+    "Document": {
+      "title": "Document",
+      "description": "Dokumentasi kegiatan berupa link Google Drive",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "ID unik dokumentasi" },
+        "title": { "type": "string", "description": "Judul kegiatan" },
+        "date": { "type": "string", "description": "Tanggal kegiatan" },
+        "url": { "type": "string", "description": "Tautan folder/foto/video Google Drive (harus https://)" },
+        "note": { "type": "string", "description": "Keterangan opsional dokumentasi" },
+        "createdAt": { "type": "string", "description": "Waktu pembuatan" },
+        "createdBy": { "type": "string", "description": "Email pembuat" }
+      },
+      "required": ["id", "title", "url"]
+    },
+    "AdminProfile": {
+      "title": "AdminProfile",
+      "description": "Profil pengelola dan hak akses aplikasi",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "UID pengguna autentikasi Firebase" },
+        "name": { "type": "string", "description": "Nama lengkap pengelola" },
+        "username": { "type": "string", "description": "Username unik pengelola" },
+        "email": { "type": "string", "description": "Alamat email" },
+        "role": { "type": "string", "enum": ["superadmin", "admin"], "description": "Peran: superadmin (Admin utama) atau admin (Pengelola)" },
+        "status": { "type": "string", "enum": ["active", "inactive"], "description": "Status akun aktif atau nonaktif" },
+        "lastLoginAt": { "type": "string", "description": "Waktu login terakhir" },
+        "createdAt": { "type": "string", "description": "Waktu pendaftaran akun" }
+      },
+      "required": ["id", "name", "username", "email", "role", "status"]
+    },
+    "AuditLog": {
+      "title": "AuditLog",
+      "description": "Catatan log riwayat audit perubahan data dan akun",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "ID unik log" },
+        "type": { "type": "string", "description": "user_management atau tree_change" },
+        "action": { "type": "string", "description": "Aksi yang dilakukan" },
+        "description": { "type": "string", "description": "Deskripsi rinci perubahan" },
+        "performedBy": { "type": "string", "description": "Nama / email pengelola pelaksana" },
+        "performedByUid": { "type": "string", "description": "UID pengelola" },
+        "performedByRole": { "type": "string", "description": "Peran pelaksana" },
+        "targetId": { "type": "string", "description": "ID entitas target" },
+        "timestamp": { "type": "string", "description": "Waktu tindakan" }
+      },
+      "required": ["id", "action", "description", "timestamp"]
+    },
+    "UsernameMapping": {
+      "title": "UsernameMapping",
+      "description": "Pemetaan username ke email untuk kemudahan login",
+      "type": "object",
+      "properties": {
+        "username": { "type": "string", "description": "Username lowercase" },
+        "email": { "type": "string", "description": "Email pengguna" },
+        "uid": { "type": "string", "description": "Firebase UID" }
+      },
+      "required": ["username", "email"]
+    }
+  },
+  "firestore": {
+    "/members/{memberId}": {
+      "schema": "Member",
+      "description": "Koleksi data anggota silsilah keluarga"
+    },
+    "/news/{newsId}": {
+      "schema": "News",
+      "description": "Koleksi berita kegiatan keluarga"
+    },
+    "/docs/{docId}": {
+      "schema": "Document",
+      "description": "Koleksi dokumentasi kegiatan keluarga"
+    },
+    "/admins/{adminId}": {
+      "schema": "AdminProfile",
+      "description": "Koleksi profil admin dan pengelola"
+    },
+    "/audit_logs/{logId}": {
+      "schema": "AuditLog",
+      "description": "Koleksi catatan riwayat aktivitas dan audit"
+    },
+    "/usernames/{username}": {
+      "schema": "UsernameMapping",
+      "description": "Pemetaan username ke email"
+    }
+  }
+}

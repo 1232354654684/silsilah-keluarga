@@ -1,0 +1,337 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Silsilah Keluarga</title>
+<style>
+:root{--bg:#f7f7f5;--surface:#fff;--ink:#1d2321;--mute:#6b7571;--line:#d5dbd8;--accent:#2f6f5e;--accent-soft:#e4f0ec;--danger:#b3402f;--r:14px;
+box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#141816;--surface:#1d2321;--ink:#eef2f0;--mute:#97a39e;--line:#34403b;--accent:#6fc2aa;--accent-soft:#223630;--danger:#e8806f}}
+:root[data-theme="dark"]{--bg:#141816;--surface:#1d2321;--ink:#eef2f0;--mute:#97a39e;--line:#34403b;--accent:#6fc2aa;--accent-soft:#223630;--danger:#e8806f}
+*{box-sizing:border-box}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.5 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+.wrap{max-width:1100px;margin:0 auto;padding:24px 16px 64px}
+header{display:flex;flex-wrap:wrap;gap:12px;align-items:center;justify-content:space-between;margin-bottom:24px}
+h1{font-size:22px;margin:0;font-weight:650;letter-spacing:-.01em}
+.tabs{display:flex;background:var(--surface);border:1px solid var(--line);border-radius:999px;padding:3px}
+.tabs button{border:0;background:none;color:var(--mute);padding:7px 16px;border-radius:999px;font:inherit;font-size:14px;cursor:pointer}
+.tabs button.on{background:var(--accent);color:#fff}
+button{font:inherit}
+.btn{border:1px solid var(--line);background:var(--surface);color:var(--ink);padding:8px 14px;border-radius:10px;cursor:pointer;font-size:14px}
+.btn:hover{border-color:var(--accent)}
+.btn.pri{background:var(--accent);border-color:var(--accent);color:#fff}
+.btn.dng{color:var(--danger)}
+.crumbs{display:flex;flex-wrap:wrap;gap:6px;align-items:center;font-size:14px;margin-bottom:16px;color:var(--mute)}
+.crumbs button{border:0;background:none;color:var(--accent);cursor:pointer;padding:2px 4px;font-size:14px}
+.crumbs span.cur{color:var(--ink);font-weight:600}
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:20px;margin-bottom:24px}
+.panel h2{margin:0 0 4px;font-size:20px}
+.meta{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:14px;margin:14px 0}
+.meta div small{display:block;color:var(--mute);font-size:12px;text-transform:uppercase;letter-spacing:.05em}
+.acts{display:flex;flex-wrap:wrap;gap:8px}
+.scroller{overflow-x:auto;padding:8px 0 16px}
+.tree{width:max-content;margin:0 auto}
+.tree ul{display:flex;justify-content:center;margin:0;padding:20px 0 0;position:relative}
+.tree>ul{padding-top:0}
+.tree li{list-style:none;position:relative;padding:20px 8px 0;display:flex;flex-direction:column;align-items:center}
+.tree>ul>li{padding-top:0}
+.tree ul ul::before{content:"";position:absolute;top:0;left:50%;border-left:1px solid var(--line);height:20px}
+.tree li::before,.tree li::after{content:"";position:absolute;top:0;right:50%;border-top:1px solid var(--line);width:50%;height:20px}
+.tree li::after{right:auto;left:50%;border-left:1px solid var(--line)}
+.tree li:only-child::before,.tree li:only-child::after,.tree>ul>li::before,.tree>ul>li::after{display:none}
+.tree li:only-child{padding-top:20px}
+.tree li:first-child::before,.tree li:last-child::after{border:0 none}
+.tree li:last-child::before{border-right:1px solid var(--line);border-radius:0 8px 0 0}
+.tree li:first-child::after{border-radius:8px 0 0 0}
+.node{width:168px;text-align:left;background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:10px 12px;cursor:pointer;color:var(--ink);transition:.15s}
+.node:hover{border-color:var(--accent);transform:translateY(-1px)}
+.node.focus{background:var(--accent-soft);border-color:var(--accent);cursor:default}
+.node b{display:block;font-size:15px;line-height:1.25}
+.node small{display:block;color:var(--mute);font-size:12px;margin-top:2px}
+.badge{display:inline-block;margin-top:6px;font-size:11px;background:var(--accent-soft);color:var(--accent);border-radius:999px;padding:1px 8px}
+.empty{text-align:center;padding:56px 16px;color:var(--mute)}
+.empty .btn{margin-top:14px}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:14px}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:16px;display:flex;flex-direction:column;gap:6px}
+.card h3{margin:0;font-size:16px}
+.card p{margin:0;color:var(--mute);font-size:14px}
+.card a{color:var(--accent);font-weight:600;font-size:14px;text-decoration:none}
+.card .acts{margin-top:auto;padding-top:8px}
+dialog{border:1px solid var(--line);border-radius:var(--r);background:var(--surface);color:var(--ink);padding:22px;width:min(460px,calc(100vw - 24px))}
+dialog::backdrop{background:rgba(0,0,0,.4)}
+dialog h3{margin:0 0 14px}
+label{display:block;font-size:13px;color:var(--mute);margin-bottom:12px}
+input,textarea,select{display:block;width:100%;margin-top:4px;padding:9px 10px;border:1px solid var(--line);border-radius:8px;background:var(--bg);color:var(--ink);font:inherit;font-size:15px}
+.row{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.note{font-size:13px;color:var(--mute);margin:0 0 8px}
+.err{color:var(--danger);font-size:13px;min-height:18px}
+.arow{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:12px 0;border-bottom:1px solid var(--line)}
+.arow:last-child{border-bottom:0}
+.arow small{display:block;color:var(--mute);font-size:13px}
+.foot{text-align:center;color:var(--mute);font-size:12px;padding:0 16px 32px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>Silsilah Keluarga</h1>
+    <nav class="tabs"><button id="t-tree" class="on">Pohon Keluarga</button><button id="t-news">Berita</button><button id="t-docs">Dokumentasi</button><button id="t-admin" style="display:none">Admin</button></nav>
+  </header>
+  <main id="app"></main>
+</div>
+
+<dialog id="dlg"></dialog>
+<footer class="foot">Halaman ini bisa dilihat siapa saja. Pengelola masuk dengan email dan password akun Claude yang sudah diundang sebagai Editor.</footer>
+
+<script id="data" type="application/json">{"members":[],"docs":[]}</script>
+<script>
+(function(){
+var SRC="<!DOCTYPE html>\n"+document.documentElement.outerHTML;
+var D=JSON.parse(document.getElementById("data").textContent);
+var members=D.members||[],docs=D.docs||[],news=D.news||[],focus=null,tab="tree",canWrite=false,isAdmin=false,art=null,db=true,delArm=null;
+var $=function(s){return document.querySelector(s)};
+function el(tag,cls,txt){var e=document.createElement(tag);if(cls)e.className=cls;if(txt!=null)e.textContent=txt;return e}
+function byId(id){return members.find(function(m){return m.id===id})}
+function kids(id){return members.filter(function(m){return m.parentId===id}).sort(function(a,b){return (a.birth||"9").localeCompare(b.birth||"9")})}
+function count(id){var n=0;kids(id).forEach(function(k){n+=1+count(k.id)});return n}
+function fmt(d){if(!d)return"";var t=new Date(d+"T00:00:00");return isNaN(t)?d:t.toLocaleDateString("id-ID",{day:"numeric",month:"long",year:"numeric"})}
+function ttl(m){var p=[];if(m.birthPlace)p.push(m.birthPlace);if(m.birth)p.push(fmt(m.birth));return p.join(", ")}
+function btn(label,cls,fn){var b=el("button","btn "+(cls||""),label);b.onclick=fn;return b}
+
+function render(){
+  $("#t-tree").className=tab==="tree"?"on":"";$("#t-docs").className=tab==="docs"?"on":"";$("#t-admin").className=tab==="admin"?"on":"";$("#t-news").className=tab==="news"?"on":"";$("#t-admin").style.display=isAdmin?"":"none";
+  var app=$("#app");app.textContent="";
+  if(!db){app.appendChild(el("div","empty","Data keluarga belum bisa dimuat. Buka halaman ini lewat akun yang diundang."));return}
+  tab==="admin"&&isAdmin?renderAdmin(app):tab==="docs"?renderDocs(app):tab==="news"?renderNews(app):renderTree(app);
+}
+
+function renderTree(app){
+  if(focus&&!byId(focus))focus=null;
+  var roots=members.filter(function(m){return !m.parentId||!byId(m.parentId)});
+  if(!members.length){
+    var e=el("div","empty","Belum ada anggota keluarga.");
+    if(canWrite)e.appendChild(el("div")).appendChild(btn("+ Tambah leluhur pertama","pri",function(){openMember(null,null)}));
+    app.appendChild(e);return;
+  }
+  var cr=el("div","crumbs");
+  var home=el("button",null,"Semua leluhur");home.onclick=function(){focus=null;render()};cr.appendChild(home);
+  var path=[],c=focus?byId(focus):null;while(c){path.unshift(c);c=byId(c.parentId)}
+  path.forEach(function(p,i){cr.appendChild(el("span",null,"›"));
+    if(i===path.length-1)cr.appendChild(el("span","cur",p.name));
+    else{var b=el("button",null,p.name);b.onclick=function(){focus=p.id;render()};cr.appendChild(b)}});
+  app.appendChild(cr);
+
+  if(focus){
+    var m=byId(focus),p=el("div","panel");
+    p.appendChild(el("h2",null,m.name));
+    var meta=el("div","meta");
+    [["Tempat, tanggal lahir",ttl(m)],["Alamat",m.address],["Pasangan",m.spouse],["Catatan",m.notes],["Keturunan",count(m.id)+" orang"]].forEach(function(r){
+      if(!r[1])return;var d=el("div");d.appendChild(el("small",null,r[0]));d.appendChild(el("span",null,r[1]));meta.appendChild(d)});
+    p.appendChild(meta);
+    if(canWrite){
+      var a=el("div","acts");
+      a.appendChild(btn("+ Tambah anak","pri",function(){openMember(null,m.id)}));
+      a.appendChild(btn("Edit","",function(){openMember(m,m.parentId)}));
+      var has=kids(m.id).length>0;
+      var del=btn(delArm===m.id?"Yakin hapus?":"Hapus","dng",function(){
+        if(has){alert("Hapus dulu anggota di bawahnya.");return}
+        if(delArm!==m.id){delArm=m.id;render();return}
+        var par=m.parentId;delArm=null;focus=par||null;commit(function(){members=members.filter(function(x){return x.id!==m.id})});});
+      a.appendChild(del);p.appendChild(a);
+    }
+    app.appendChild(p);
+  }
+
+  var sc=el("div","scroller"),tree=el("div","tree"),ul=el("ul");
+  (focus?[byId(focus)]:roots).forEach(function(r){ul.appendChild(node(r,0))});
+  tree.appendChild(ul);sc.appendChild(tree);app.appendChild(sc);
+  if(!focus&&canWrite){var ar=el("div","acts");ar.appendChild(btn("+ Tambah leluhur lain","",function(){openMember(null,null)}));app.appendChild(ar)}
+  if(focus&&!kids(focus).length)app.appendChild(el("p","note","Belum ada anak. Gunakan Tambah anak untuk melanjutkan cabang ini."));
+}
+
+function node(m,d){
+  var li=el("li"),b=el("button","node"+(m.id===focus?" focus":""));
+  b.appendChild(el("b",null,m.name));
+  var t=ttl(m);if(t)b.appendChild(el("small",null,t));
+  var n=count(m.id);if(n)b.appendChild(el("span","badge",kids(m.id).length+" anak"));
+  b.onclick=function(){if(m.id!==focus){focus=m.id;delArm=null;render();window.scrollTo(0,0)}};
+  li.appendChild(b);
+  var ks=kids(m.id);
+  if(ks.length&&d<2){var ul=el("ul");ks.forEach(function(k){ul.appendChild(node(k,d+1))});li.appendChild(ul)}
+  else if(ks.length){li.appendChild(el("small",null,"+ "+n+" keturunan"));li.lastChild.style.cssText="color:var(--mute);font-size:12px;margin-top:6px"}
+  return li;
+}
+
+function persist(){
+  if(!art)return Promise.reject({});
+  try{sessionStorage.setItem("sk",JSON.stringify({focus:focus,tab:tab}))}catch(e){}
+  var json=JSON.stringify({members:members,docs:docs,news:news}).replace(/</g,"\\u003c");
+  var html=SRC.replace(/(<script id="data" type="application\/json">)[\s\S]*?(<\/script>)/,function(_,a,b){return a+json+b});
+  return art.publish(html);
+}
+function commit(fn,err,done){
+  var old=JSON.stringify({members:members,docs:docs,news:news});
+  fn();
+  persist().then(function(){if(done)done()}).catch(function(e){
+    var o=JSON.parse(old);members=o.members;docs=o.docs;news=o.news;
+    var msg="Gagal menyimpan, coba lagi.";
+    if(err)err.textContent=msg;else alert(msg);
+  });
+}
+function gens(id){var mx=0;kids(id).forEach(function(c){mx=Math.max(mx,gens(c.id))});return 1+mx}
+function renderAdmin(app){
+  var roots=members.filter(function(m){return !m.parentId||!byId(m.parentId)});
+  var g=0;roots.forEach(function(r){g=Math.max(g,gens(r.id))});
+  var st=el("div","grid");
+  [["Anggota",members.length],["Generasi",g],["Dokumentasi",docs.length],["Berita",news.length]].forEach(function(s){
+    var c=el("div","card");c.appendChild(el("p",null,s[0]));
+    var h=el("h2",null,String(s[1]));h.style.cssText="margin:0;font-size:28px";c.appendChild(h);st.appendChild(c)});
+  app.appendChild(st);
+  var bar=el("div","acts");bar.style.margin="20px 0 12px";
+  bar.appendChild(btn("+ Tambah anggota","pri",function(){openMember(null,null)}));
+  bar.appendChild(btn("+ Tambah dokumentasi","",function(){openDoc(null)}));
+  bar.appendChild(btn("+ Tambah berita","",function(){openNews(null)}));
+  app.appendChild(bar);
+  var q=el("input");q.placeholder="Cari nama...";q.style.marginBottom="12px";app.appendChild(q);
+  var list=el("div","panel");list.style.padding="4px 16px";app.appendChild(list);
+  function draw(){
+    list.textContent="";var t=q.value.toLowerCase();
+    members.filter(function(m){return m.name.toLowerCase().indexOf(t)>-1}).sort(function(a,b){return a.name.localeCompare(b.name)}).forEach(function(m){
+      var r=el("div","arow"),i=el("div"),p=byId(m.parentId);
+      i.appendChild(el("b",null,m.name));
+      i.appendChild(el("small",null,(p?"Anak dari "+p.name:"Leluhur")+(ttl(m)?" · "+ttl(m):"")));
+      r.appendChild(i);
+      var a=el("div","acts");
+      a.appendChild(btn("Lihat","",function(){focus=m.id;tab="tree";render()}));
+      a.appendChild(btn("Edit","",function(){openMember(m,m.parentId)}));
+      r.appendChild(a);list.appendChild(r)});
+    if(!list.firstChild)list.appendChild(el("p","note","Tidak ada anggota."));
+  }
+  q.oninput=draw;draw();
+}
+function renderNews(app){
+  var top=el("div","acts");top.style.marginBottom="16px";
+  if(canWrite)top.appendChild(btn("+ Tambah berita","pri",function(){openNews(null)}));
+  app.appendChild(top);
+  if(!news.length){app.appendChild(el("div","empty","Belum ada berita kegiatan."));return}
+  var box=el("div");box.style.cssText="max-width:720px;margin:0 auto";
+  news.slice().sort(function(a,b){return (b.date||"").localeCompare(a.date||"")}).forEach(function(n){
+    var p=el("article","panel");
+    if(n.date){var dt=el("small",null,fmt(n.date));dt.style.color="var(--mute)";p.appendChild(dt)}
+    p.appendChild(el("h2",null,n.title));
+    var b=el("p",null,n.body||"");b.style.cssText="white-space:pre-wrap;margin:10px 0";p.appendChild(b);
+    var ac=el("div","acts");
+    if(n.url){var a=el("a",null,"Lihat foto/video di Google Drive →");a.href=n.url;a.target="_blank";a.rel="noopener noreferrer";a.style.cssText="color:var(--accent);font-weight:600;font-size:14px;text-decoration:none;align-self:center";ac.appendChild(a)}
+    if(canWrite)ac.appendChild(btn("Edit","",function(){openNews(n)}));
+    if(ac.firstChild)p.appendChild(ac);
+    box.appendChild(p)});
+  app.appendChild(box);
+}
+function openNews(x){
+  var d=$("#dlg");d.textContent="";d.appendChild(el("h3",null,x?"Edit berita":"Tambah berita"));
+  d.appendChild(field("Judul berita","title",x&&x.title,null,"Contoh: Reuni keluarga besar"));
+  d.appendChild(field("Tanggal","date",x?x.date:new Date().toISOString().slice(0,10),"date"));
+  var fb=field("Isi berita","body",x&&x.body,"textarea");fb.querySelector("textarea").rows=7;d.appendChild(fb);
+  d.appendChild(field("Link Google Drive (opsional)","url",x&&x.url,"url","https://drive.google.com/..."));
+  var err=el("div","err");d.appendChild(err);
+  var a=el("div","acts");a.style.justifyContent="flex-end";
+  if(x)a.appendChild(btn("Hapus","dng",function(){commit(function(){news=news.filter(function(y){return y.id!==x.id})},err,function(){d.close()})}));
+  a.appendChild(btn("Batal","",function(){d.close()}));
+  a.appendChild(btn("Simpan","pri",function(){
+    var t=val(d,"title"),u=val(d,"url");
+    if(!t){err.textContent="Judul wajib diisi.";return}
+    if(u&&!/^https:\/\//i.test(u)){err.textContent="Link harus diawali https://";return}
+    var nid=x?x.id:newId(),rec={id:nid,title:t,date:val(d,"date"),body:val(d,"body"),url:u};
+    tab="news";
+    commit(function(){news=news.filter(function(y){return y.id!==nid});news.push(rec)},err,function(){d.close()});
+  }));
+  d.appendChild(a);d.showModal();
+}
+function renderDocs(app){
+  var top=el("div","acts");top.style.marginBottom="16px";
+  if(canWrite)top.appendChild(btn("+ Tambah dokumentasi","pri",function(){openDoc(null)}));
+  app.appendChild(top);
+  app.appendChild(el("p","note","Foto dan video disimpan di Google Drive. Di sini cukup menempelkan link-nya."));
+  if(!docs.length){app.appendChild(el("div","empty","Belum ada dokumentasi kegiatan."));return}
+  var g=el("div","grid");
+  docs.slice().sort(function(a,b){return (b.date||"").localeCompare(a.date||"")}).forEach(function(d){
+    var c=el("div","card");c.appendChild(el("h3",null,d.title));
+    if(d.date)c.appendChild(el("p",null,fmt(d.date)));
+    if(d.note)c.appendChild(el("p",null,d.note));
+    var a=el("a",null,"Buka di Google Drive →");a.href=d.url;a.target="_blank";a.rel="noopener noreferrer";c.appendChild(a);
+    if(canWrite){var ac=el("div","acts");ac.appendChild(btn("Edit","",function(){openDoc(d)}));c.appendChild(ac)}
+    g.appendChild(c)});
+  app.appendChild(g);
+}
+
+function field(lbl,name,val,type,ph){var l=el("label",null,lbl),i=el(type==="textarea"?"textarea":"input");
+  if(type&&type!=="textarea")i.type=type;if(type==="textarea")i.rows=2;i.name=name;i.value=val||"";if(ph)i.placeholder=ph;l.appendChild(i);return l}
+function val(d,n){return d.querySelector("[name="+n+"]").value.trim()}
+function newId(){return "x"+Date.now().toString(36)+Math.random().toString(36).slice(2,6)}
+
+function openMember(m,parentId){
+  var d=$("#dlg");d.textContent="";d.appendChild(el("h3",null,m?"Edit anggota":"Tambah anggota"));
+  d.appendChild(field("Nama lengkap","name",m&&m.name));
+  var r=el("div","row");r.appendChild(field("Tempat lahir","birthPlace",m&&m.birthPlace));r.appendChild(field("Tanggal lahir","birth",m&&m.birth,"date"));d.appendChild(r);
+  d.appendChild(field("Alamat","address",m&&m.address,"textarea"));
+  d.appendChild(field("Pasangan (opsional)","spouse",m&&m.spouse));
+  d.appendChild(field("Catatan (opsional)","notes",m&&m.notes,"textarea"));
+  var banned={};if(m){(function w(id){banned[id]=1;kids(id).forEach(function(k){w(k.id)})})(m.id)}
+  var l=el("label",null,"Orang tua"),s=el("select");s.name="parentId";
+  var o0=el("option",null,"Tidak ada (leluhur tertua)");o0.value="";s.appendChild(o0);
+  members.filter(function(x){return !banned[x.id]}).forEach(function(x){var o=el("option",null,x.name);o.value=x.id;s.appendChild(o)});
+  s.value=parentId||"";l.appendChild(s);d.appendChild(l);
+  var err=el("div","err");d.appendChild(err);
+  var a=el("div","acts");a.style.justifyContent="flex-end";
+  a.appendChild(btn("Batal","",function(){d.close()}));
+  a.appendChild(btn("Simpan","pri",function(){
+    var name=val(d,"name");if(!name){err.textContent="Nama wajib diisi.";return}
+    var id=m?m.id:newId();
+    var rec={id:id,name:name,birthPlace:val(d,"birthPlace"),birth:val(d,"birth"),address:val(d,"address"),spouse:val(d,"spouse"),notes:val(d,"notes"),parentId:val(d,"parentId")};
+    if(!m&&parentId)focus=parentId;
+    commit(function(){members=members.filter(function(x){return x.id!==id});members.push(rec)},err,function(){d.close()});
+  }));
+  d.appendChild(a);d.showModal();
+}
+
+function openDoc(x){
+  var d=$("#dlg");d.textContent="";d.appendChild(el("h3",null,x?"Edit dokumentasi":"Tambah dokumentasi"));
+  d.appendChild(field("Judul kegiatan","title",x&&x.title,null,"Contoh: Reuni keluarga 2026"));
+  d.appendChild(field("Tanggal","date",x&&x.date,"date"));
+  d.appendChild(field("Link Google Drive (folder / foto / video)","url",x&&x.url,"url","https://drive.google.com/..."));
+  d.appendChild(field("Keterangan (opsional)","note",x&&x.note,"textarea"));
+  var err=el("div","err");d.appendChild(err);
+  var a=el("div","acts");a.style.justifyContent="flex-end";
+  if(x)a.appendChild(btn("Hapus","dng",function(){commit(function(){docs=docs.filter(function(y){return y.id!==x.id})},err,function(){d.close()})}));
+  a.appendChild(btn("Batal","",function(){d.close()}));
+  a.appendChild(btn("Simpan","pri",function(){
+    var t=val(d,"title"),u=val(d,"url");
+    if(!t){err.textContent="Judul wajib diisi.";return}
+    if(!/^https:\/\//i.test(u)){err.textContent="Link harus diawali https://";return}
+    var did=x?x.id:newId(),rec={id:did,title:t,date:val(d,"date"),url:u,note:val(d,"note")};
+    commit(function(){docs=docs.filter(function(y){return y.id!==did});docs.push(rec)},err,function(){d.close()});
+  }));
+  d.appendChild(a);d.showModal();
+}
+
+$("#t-tree").onclick=function(){tab="tree";render()};
+$("#t-docs").onclick=function(){tab="docs";render()};
+$("#t-admin").onclick=function(){tab="admin";render()};
+$("#t-news").onclick=function(){tab="news";render()};
+render();
+
+try{var ss=JSON.parse(sessionStorage.getItem("sk")||"null");if(ss){focus=ss.focus||null;tab=ss.tab||"tree"}}catch(e){}
+(async function(){
+  try{
+    var u=await claude.use("user");
+    if(u&&u.canEdit()){art=await claude.use("artifact");isAdmin=!!art;canWrite=isAdmin}
+  }catch(e){}
+  if(!isAdmin&&tab==="admin")tab="tree";
+  render();
+})();
+})();
+</script>
+</body>
+</html>
