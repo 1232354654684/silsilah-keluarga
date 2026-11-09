@@ -14,6 +14,7 @@ export interface ExcelImportRow {
   deathDate: string | null;
   spouseName: string | null;
   spouseKode: string | null;
+  isInLaw: boolean;
   address: string | null;
   avatarUrl: string | null;
   notes: string | null;
@@ -276,6 +277,13 @@ export async function parseExcelMembers(
       }
       if (['nama pasangan', 'pasangan'].includes(normalized)) headerMap.set('spouseName', colIndex);
       if (['kode pasangan'].includes(normalized)) headerMap.set('spouseKode', colIndex);
+      if (
+        normalized.includes('menantu') ||
+        normalized.includes('luar keluarga') ||
+        normalized.includes('in-law')
+      ) {
+        headerMap.set('isInLaw', colIndex);
+      }
       if (['alamat', 'domisili'].includes(normalized)) headerMap.set('address', colIndex);
       if (['link foto', 'foto', 'foto url', 'url foto', 'link gambar'].includes(normalized)) {
         headerMap.set('avatarUrl', colIndex);
@@ -349,6 +357,7 @@ export async function parseExcelMembers(
     const spouseName = String(getVal('spouseName') || '').trim() || null;
     const spouseKodeRaw = String(getVal('spouseKode') || '').trim();
     const spouseKode = spouseKodeRaw === '' ? null : spouseKodeRaw;
+    const isInLaw = normalizeBoolean(getVal('isInLaw'));
 
     const address = String(getVal('address') || '').trim() || null;
     const avatarUrl = String(getVal('avatarUrl') || '').trim() || null;
@@ -436,6 +445,7 @@ export async function parseExcelMembers(
       deathDate: isDeceased ? deathDateRes.dateStr : null,
       spouseName,
       spouseKode,
+      isInLaw,
       address,
       avatarUrl,
       notes,
@@ -678,6 +688,7 @@ export function buildMembersFromExcelRows(
       deathDate: row.deathDate,
       spouse: row.spouseName,
       spouseMemberId,
+      isInLaw: row.isInLaw,
       address: row.address,
       avatarUrl: row.avatarUrl,
       notes: row.notes,
@@ -685,6 +696,24 @@ export function buildMembersFromExcelRows(
       updatedAt: nowIso,
       updatedBy: options.adminName || 'Admin',
     };
+  });
+
+  // 3. Pastikan relasi pasangan bersifat DUA ARAH secara konsisten
+  members.forEach((m) => {
+    if (m.spouseMemberId) {
+      const partner = members.find((p) => p.id === m.spouseMemberId);
+      if (partner) {
+        if (!partner.spouseMemberId) {
+          partner.spouseMemberId = m.id;
+        }
+        if (!partner.spouse) {
+          partner.spouse = m.name;
+        }
+        if (!m.spouse) {
+          m.spouse = partner.name;
+        }
+      }
+    }
   });
 
   return members;

@@ -14,8 +14,10 @@ import {
   ZoomIn,
   ZoomOut,
   RotateCcw,
+  Heart,
 } from 'lucide-react';
 import { exportTreeToPdf, exportTreeToImage } from '../../utils/export';
+import { getLinkedSpouse, isCompanionMember } from '../../utils/spouse';
 
 interface FamilyTreeProps {
   members: Member[];
@@ -23,6 +25,8 @@ interface FamilyTreeProps {
   focusedMemberId: string | null;
   setFocusedMemberId: (id: string | null) => void;
   onAddMember: (parentId?: string) => void;
+  onAddSpouse: (member: Member) => void;
+  onUnlinkSpouse?: (memberAId: string, memberBId: string) => Promise<void>;
   onEditMember: (member: Member) => void;
   onMoveParent: (member: Member) => void;
   onDeleteMember: (member: Member) => void;
@@ -35,6 +39,8 @@ export const FamilyTree: React.FC<FamilyTreeProps> = ({
   focusedMemberId,
   setFocusedMemberId,
   onAddMember,
+  onAddSpouse,
+  onUnlinkSpouse,
   onEditMember,
   onMoveParent,
   onDeleteMember,
@@ -48,34 +54,72 @@ export const FamilyTree: React.FC<FamilyTreeProps> = ({
   members.forEach((m) => memberMap.set(m.id, m));
 
   const getChildren = (id: string) => {
+    const m = memberMap.get(id);
+    const spouse = m ? getLinkedSpouse(m, members) : null;
     return members
-      .filter((m) => m.parentId === id)
+      .filter((c) => {
+        if (c.id === id) return false;
+        if (spouse && c.id === spouse.id) return false;
+        // Anggota pendamping tidak pernah muncul sebagai anak di silsilah
+        if (isCompanionMember(c, members)) return false;
+        return c.parentId === id || (spouse && c.parentId === spouse.id);
+      })
       .sort((a, b) => (a.birthDate || '9999').localeCompare(b.birthDate || '9999'));
   };
 
-  const countDescendants = (id: string): number => {
+  const countDescendants = (id: string, visited = new Set<string>()): number => {
+    if (visited.has(id)) return 0;
+    visited.add(id);
     let count = 0;
     const kids = getChildren(id);
     kids.forEach((k) => {
-      count += 1 + countDescendants(k.id);
+      count += 1 + countDescendants(k.id, visited);
     });
     return count;
   };
 
-  // Find root ancestors (no parent or parent not found in members)
-  const rootAncestors = members.filter(
-    (m) => !m.parentId || !memberMap.has(m.parentId)
-  );
+  // Find root ancestors: anggota tanpa parentId (atau parent tidak ada di database) dan BUKAN pendamping
+  const rootAncestors = members.filter((m) => {
+    if (isCompanionMember(m, members)) return false;
+    return !m.parentId || !memberMap.has(m.parentId);
+  });
+
+  const displayRoots =
+    rootAncestors.length > 0
+      ? rootAncestors
+      : members.filter((m) => !isCompanionMember(m, members));
 
   // Focused member
   const focusedMember = focusedMemberId ? memberMap.get(focusedMemberId) || null : null;
+  const isFocusedCompanion = focusedMember ? isCompanionMember(focusedMember, members) : false;
+  const bloodSpouseOfFocused = isFocusedCompanion && focusedMember?.spouseMemberId
+    ? memberMap.get(focusedMember.spouseMemberId) || null
+    : null;
+
+  // Root yang ditampilkan di canvas pohon saat ada fokus:
+  // Jika yang difokuskan adalah pendamping, pohon merender cabang silsilah pasangan darahnya
+  const treeRootMember = bloodSpouseOfFocused || focusedMember;
 
   // Build breadcrumb path
-  const breadcrumbPath: Member[] = [];
-  let current: Member | null = focusedMember;
-  while (current) {
-    breadcrumbPath.unshift(current);
-    current = current.parentId ? memberMap.get(current.parentId) || null : null;
+  const breadcrumbItems: Array<{ id: string; name: string }> = [];
+  let current: Member | null = bloodSpouseOfFocused || focusedMember;
+  const breadcrumbVisited = new Set<string>();
+  while (current && !breadcrumbVisited.has(current.id)) {
+    breadcrumbVisited.add(current.id);
+    breadcrumbItems.unshift({ id: current.id, name: current.name });
+    if (current.parentId) {
+      current = memberMap.get(current.parentId) || null;
+    } else {
+      current = null;
+    }
+  }
+
+  // Jika yang difokuskan adalah pendamping, tambahkan namanya dengan suffix "(pasangan)"
+  if (isFocusedCompanion && focusedMember) {
+    breadcrumbItems.push({
+      id: focusedMember.id,
+      name: `${focusedMember.name} (pasangan)`,
+    });
   }
 
   // Handle Export
@@ -103,23 +147,69 @@ export const FamilyTree: React.FC<FamilyTreeProps> = ({
 
   // Recursive tree node renderer (renders up to 3 generations: depth 0, 1, 2)
   const renderTreeNode = (m: Member, depth: number) => {
+    const spouse = getLinkedSpouse(m, members);
     const kids = getChildren(m.id);
     const totalDesc = countDescendants(m.id);
     const isFocused = m.id === focusedMemberId;
+    const isSpouseFocused = spouse?.id === focusedMemberId;
 
     return (
       <li key={m.id} className="animate-in fade-in duration-200">
-        <MemberCard
-          member={m}
-          isFocused={isFocused}
-          childrenCount={kids.length}
-          totalDescendantsCount={totalDesc}
-          onClick={() => {
-            setFocusedMemberId(m.id);
-            window.scrollTo({ top: 0, behavior: 'smooth' });
-          }}
-          isPublicView={!isAdmin}
-        />
+        {spouse ? (
+          <div className="flex items-center justify-center relative">
+            <MemberCard
+              member={m}
+              isFocused={isFocused}
+              childrenCount={kids.length}
+              totalDescendantsCount={totalDesc}
+              onClick={() => {
+                setFocusedMemberId(m.id);
+                window.scrollTo({ top: 0, behavior: 'smooth' });
+              }}
+              isPublicView={!isAdmin}
+              allMembers={members}
+              hideSpouseText={true}
+            />
+            {/* Horizontal connector line with Heart icon */}
+            <div className="flex items-center justify-center px-1 text-rose-500 relative select-none">
+              <div className="w-2.5 sm:w-3 h-0.5 bg-rose-300 dark:bg-rose-800" />
+              <div
+                className="p-1 rounded-full bg-rose-50 dark:bg-rose-950/70 border border-rose-200 dark:border-rose-800 shadow-2xs z-10 hover:scale-110 transition-transform"
+                title={`Pasangan Menikah: ${m.name} & ${spouse.name}`}
+              >
+                <Heart className="w-3.5 h-3.5 fill-rose-500 text-rose-500" />
+              </div>
+              <div className="w-2.5 sm:w-3 h-0.5 bg-rose-300 dark:bg-rose-800" />
+            </div>
+            <MemberCard
+              member={spouse}
+              isFocused={isSpouseFocused}
+              childrenCount={0}
+              totalDescendantsCount={0}
+              onClick={() => {
+                setFocusedMemberId(spouse.id);
+                window.scrollTo({ top: 0, behavior: 'smooth' });
+              }}
+              isPublicView={!isAdmin}
+              allMembers={members}
+              hideSpouseText={true}
+            />
+          </div>
+        ) : (
+          <MemberCard
+            member={m}
+            isFocused={isFocused}
+            childrenCount={kids.length}
+            totalDescendantsCount={totalDesc}
+            onClick={() => {
+              setFocusedMemberId(m.id);
+              window.scrollTo({ top: 0, behavior: 'smooth' });
+            }}
+            isPublicView={!isAdmin}
+            allMembers={members}
+            hideSpouseText={false}
+          />
+        )}
 
         {/* Up to 3 generations: depth < 2 renders children */}
         {kids.length > 0 && depth < 2 ? (
@@ -198,10 +288,10 @@ export const FamilyTree: React.FC<FamilyTreeProps> = ({
             <span>Semua Leluhur</span>
           </button>
 
-          {breadcrumbPath.map((item, idx) => {
-            const isLast = idx === breadcrumbPath.length - 1;
+          {breadcrumbItems.map((item, idx) => {
+            const isLast = idx === breadcrumbItems.length - 1;
             return (
-              <React.Fragment key={item.id}>
+              <React.Fragment key={item.id + idx}>
                 <ChevronRight className="w-3.5 h-3.5 text-[var(--mute)] shrink-0" />
                 {isLast ? (
                   <span className="font-bold text-[var(--ink)] truncate max-w-[140px] sm:max-w-none">
@@ -283,12 +373,14 @@ export const FamilyTree: React.FC<FamilyTreeProps> = ({
           allMembers={members}
           isAdmin={isAdmin}
           onAddChild={(parentId) => onAddMember(parentId)}
+          onAddSpouse={onAddSpouse}
+          onUnlinkSpouse={onUnlinkSpouse}
           onEdit={onEditMember}
           onMoveParent={onMoveParent}
           onDelete={onDeleteMember}
           onFocusMember={(id) => setFocusedMemberId(id)}
-          totalDescendants={countDescendants(focusedMember.id)}
-          childrenCount={getChildren(focusedMember.id).length}
+          totalDescendants={countDescendants(bloodSpouseOfFocused ? bloodSpouseOfFocused.id : focusedMember.id)}
+          childrenCount={getChildren(bloodSpouseOfFocused ? bloodSpouseOfFocused.id : focusedMember.id).length}
         />
       )}
 
@@ -316,7 +408,7 @@ export const FamilyTree: React.FC<FamilyTreeProps> = ({
             style={{ transform: `scale(${zoomLevel})` }}
           >
             <ul>
-              {(focusedMember ? [focusedMember] : rootAncestors).map((root) =>
+              {(treeRootMember ? [treeRootMember] : displayRoots).map((root) =>
                 renderTreeNode(root, 0)
               )}
             </ul>

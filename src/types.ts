@@ -12,6 +12,7 @@ export interface Member {
   address?: string | null;
   spouse?: string | null;
   spouseMemberId?: string | null; // ID of another member if linked
+  isInLaw?: boolean | null; // True = Pasangan dari luar keluarga (menantu), bukan keturunan darah
   parentId?: string | null; // ID of parent or null for root ancestors
   gender?: Gender | null;
   avatarUrl?: string | null; // Google Drive image URL or regular URL

@@ -1,6 +1,7 @@
 import html2canvas from 'html2canvas';
 import { jsPDF } from 'jspdf';
 import { Member } from '../types';
+import { getSpouseDisplayName } from './spouse';
 
 export async function exportTreeToImage(elementId: string, filename = 'pohon-silsilah-keluarga.png'): Promise<void> {
   const element = document.getElementById(elementId);
@@ -80,7 +81,7 @@ export function exportMembersToCSV(members: Member[], filename = 'data-anggota-s
     `"${m.birthDate || ''}"`,
     `"${m.isDeceased ? 'Ya' : 'Tidak'}"`,
     `"${m.deathDate || ''}"`,
-    `"${(m.spouse || '').replace(/"/g, '""')}"`,
+    `"${(getSpouseDisplayName(m, members) || '').replace(/"/g, '""')}"`,
     `"${(m.address || '').replace(/"/g, '""')}"`,
     `"${(m.notes || '').replace(/"/g, '""')}"`,
   ]);

@@ -1,5 +1,6 @@
 import * as XLSX from 'xlsx';
 import { Member } from '../types';
+import { getSpouseDisplayName } from './spouse';
 
 export const EXCEL_MEMBER_HEADERS = [
   'Kode',
@@ -12,6 +13,7 @@ export const EXCEL_MEMBER_HEADERS = [
   'Tanggal Wafat',
   'Nama Pasangan',
   'Kode Pasangan',
+  'Menantu (Dari Luar Keluarga)',
   'Alamat',
   'Link Foto',
   'Catatan',
@@ -29,6 +31,7 @@ const COLUMN_WIDTHS = [
   { wch: 16 }, // Tanggal Wafat
   { wch: 26 }, // Nama Pasangan
   { wch: 16 }, // Kode Pasangan
+  { wch: 28 }, // Menantu (Dari Luar Keluarga)
   { wch: 36 }, // Alamat
   { wch: 40 }, // Link Foto
   { wch: 32 }, // Catatan
@@ -82,6 +85,10 @@ function createPetunjukSheet(): XLSX.WorkSheet {
     [
       'Kode Pasangan',
       'OPSIONAL. Masukkan Kode baris pasangan jika pasangan tersebut juga terdaftar dalam daftar baris ini, agar keduanya terhubung bolak-balik.',
+    ],
+    [
+      'Menantu (Dari Luar Keluarga)',
+      'Pilih "Ya" jika anggota merupakan pasangan yang berasal dari luar garis keturunan (menantu), atau "Tidak" untuk keturunan inti.',
     ],
     [
       'Alamat',
@@ -144,9 +151,9 @@ function enhanceDataAnggotaSheet(ws: XLSX.WorkSheet, totalRows: number): void {
 
   // Autofilter pada baris 1
   const endRow = Math.max(totalRows, 2);
-  ws['!autofilter'] = { ref: `A1:N${endRow}` };
+  ws['!autofilter'] = { ref: `A1:O${endRow}` };
 
-  // Validasi Dropdown untuk Jenis Kelamin (C), Sudah Meninggal (G), dan Sembunyikan (N)
+  // Validasi Dropdown untuk Jenis Kelamin (C), Sudah Meninggal (G), Menantu (K), dan Sembunyikan (O)
   ws['!dataValidation'] = [
     {
       sqref: 'C2:C1000',
@@ -165,7 +172,15 @@ function enhanceDataAnggotaSheet(ws: XLSX.WorkSheet, totalRows: number): void {
       showDropDown: true,
     },
     {
-      sqref: 'N2:N1000',
+      sqref: 'K2:K1000',
+      type: 'list',
+      operator: 'equal',
+      formula1: '"Ya,Tidak"',
+      allowBlank: true,
+      showDropDown: true,
+    },
+    {
+      sqref: 'O2:O1000',
       type: 'list',
       operator: 'equal',
       formula1: '"Ya,Tidak"',
@@ -211,6 +226,7 @@ export function downloadMemberTemplate(): void {
       '2015-11-10',
       'Hj. Siti Aminah',
       'A2',
+      'Tidak',
       'Jl. Malioboro No. 45, Yogyakarta',
       'https://drive.google.com/file/d/contoh_foto_kakek/view',
       'Kakek / Leluhur perintis keluarga',
@@ -227,6 +243,7 @@ export function downloadMemberTemplate(): void {
       '2018-05-12',
       'H. Raden Soedirman',
       'A1',
+      'Tidak',
       'Jl. Malioboro No. 45, Yogyakarta',
       '',
       'Nenek (Pasangan H. Raden Soedirman)',
@@ -243,6 +260,7 @@ export function downloadMemberTemplate(): void {
       '',
       'Sri Wahyuni',
       'B2',
+      'Tidak',
       'Jl. Gejayan No. 12, Sleman',
       '',
       'Anak pertama (Ayah)',
@@ -259,9 +277,10 @@ export function downloadMemberTemplate(): void {
       '',
       'Bambang Soedirman',
       'B1',
+      'Ya',
       'Jl. Gejayan No. 12, Sleman',
       '',
-      'Istri Bambang (Ibu)',
+      'Istri Bambang (Menantu)',
       'Tidak',
     ],
     [
@@ -275,6 +294,7 @@ export function downloadMemberTemplate(): void {
       '',
       '',
       '',
+      'Tidak',
       'Jl. Gejayan No. 12, Sleman',
       '',
       'Cucu (Anak dari Bambang & Sri Wahyuni)',
@@ -286,7 +306,7 @@ export function downloadMemberTemplate(): void {
   const ws = XLSX.utils.aoa_to_sheet(sampleRows);
 
   // Pastikan semua sel diset sebagai text cell ('s') format '@' agar tanggal tidak dirusak Excel
-  const range = XLSX.utils.decode_range(ws['!ref'] || 'A1:N6');
+  const range = XLSX.utils.decode_range(ws['!ref'] || 'A1:O6');
   for (let R = range.s.r; R <= range.e.r; ++R) {
     for (let C = range.s.c; C <= range.e.c; ++C) {
       const cellAddress = XLSX.utils.encode_cell({ r: R, c: C });
@@ -399,10 +419,10 @@ export function exportMembersToExcel(members: Member[]): void {
     const sudahMeninggal = m.isDeceased ? 'Ya' : 'Tidak';
     const tanggalWafat = m.deathDate || '';
     
-    // Nama pasangan: gunakan m.spouse jika ada, atau nama dari spouseMemberId
-    const spouseObj = m.spouseMemberId ? memberMap.get(m.spouseMemberId) : undefined;
-    const namaPasangan = m.spouse || (spouseObj ? spouseObj.name : '');
+    // Nama pasangan: gunakan getSpouseDisplayName (prioritas profil terhubung, fallback teks)
+    const namaPasangan = getSpouseDisplayName(m, members) || '';
     const kodePasangan = (m.spouseMemberId && idToCode.get(m.spouseMemberId)) || '';
+    const menantu = m.isInLaw ? 'Ya' : 'Tidak';
 
     const alamat = m.address || '';
     const linkFoto = m.avatarUrl || '';
@@ -420,6 +440,7 @@ export function exportMembersToExcel(members: Member[]): void {
       tanggalWafat,
       namaPasangan,
       kodePasangan,
+      menantu,
       alamat,
       linkFoto,
       catatan,
@@ -430,7 +451,7 @@ export function exportMembersToExcel(members: Member[]): void {
   const ws = XLSX.utils.aoa_to_sheet(rows);
 
   // Pastikan semua sel diset sebagai text cell ('s') format '@'
-  const range = XLSX.utils.decode_range(ws['!ref'] || 'A1:N1');
+  const range = XLSX.utils.decode_range(ws['!ref'] || 'A1:O1');
   for (let R = range.s.r; R <= range.e.r; ++R) {
     for (let C = range.s.c; C <= range.e.c; ++C) {
       const cellAddress = XLSX.utils.encode_cell({ r: R, c: C });

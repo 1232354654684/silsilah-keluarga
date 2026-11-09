@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Member } from '../../types';
 import { getDisplayImageUrl } from '../../utils/googleDrive';
+import { getLinkedSpouse, getSpouseDisplayName, isCompanionMember } from '../../utils/spouse';
 import {
   User,
   Calendar,
@@ -15,6 +16,7 @@ import {
   EyeOff,
   GitBranch,
   ExternalLink,
+  Link2Off,
 } from 'lucide-react';
 
 interface MemberDetailPanelProps {
@@ -22,6 +24,8 @@ interface MemberDetailPanelProps {
   allMembers: Member[];
   isAdmin: boolean;
   onAddChild: (parentId: string) => void;
+  onAddSpouse?: (member: Member) => void;
+  onUnlinkSpouse?: (memberAId: string, memberBId: string) => Promise<void>;
   onEdit: (member: Member) => void;
   onMoveParent: (member: Member) => void;
   onDelete: (member: Member) => void;
@@ -35,6 +39,8 @@ export const MemberDetailPanel: React.FC<MemberDetailPanelProps> = ({
   allMembers,
   isAdmin,
   onAddChild,
+  onAddSpouse,
+  onUnlinkSpouse,
   onEdit,
   onMoveParent,
   onDelete,
@@ -65,9 +71,14 @@ export const MemberDetailPanel: React.FC<MemberDetailPanelProps> = ({
     }
   };
 
-  // Find linked spouse if spouseMemberId exists
-  const linkedSpouse = member.spouseMemberId
-    ? allMembers.find((m) => m.id === member.spouseMemberId)
+  // Find linked spouse using helper
+  const linkedSpouse = getLinkedSpouse(member, allMembers);
+  const spouseDisplayName = getSpouseDisplayName(member, allMembers);
+
+  // Check if this member is a companion (menantu / secondary in-tree node)
+  const isCompanion = isCompanionMember(member, allMembers);
+  const companionPartner = isCompanion && member.spouseMemberId
+    ? allMembers.find((m) => m.id === member.spouseMemberId) || null
     : null;
 
   // Find parent name
@@ -131,6 +142,11 @@ export const MemberDetailPanel: React.FC<MemberDetailPanelProps> = ({
                     : 'Lainnya'}
                 </span>
               )}
+              {member.isInLaw && (
+                <span className="text-xs px-2 py-0.5 rounded-full bg-pink-100 dark:bg-pink-950/60 text-pink-700 dark:text-pink-300 border border-pink-200 dark:border-pink-800 font-semibold shadow-2xs">
+                  Menantu
+                </span>
+              )}
               {member.hideAddressAndBirth && !isAdmin && (
                 <span className="inline-flex items-center gap-1 text-[11px] text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/30 px-2 py-0.5 rounded-full border border-amber-200 dark:border-amber-800">
                   <EyeOff className="w-3 h-3" /> Privasi Aktif
@@ -139,7 +155,17 @@ export const MemberDetailPanel: React.FC<MemberDetailPanelProps> = ({
             </div>
 
             <p className="text-xs sm:text-sm text-[var(--mute)] mt-1">
-              {parent ? (
+              {isCompanion && companionPartner ? (
+                <span>
+                  Pasangan dari{' '}
+                  <button
+                    onClick={() => onFocusMember(companionPartner.id)}
+                    className="text-[var(--accent)] font-semibold hover:underline cursor-pointer"
+                  >
+                    {companionPartner.name}
+                  </button>
+                </span>
+              ) : parent ? (
                 <span>
                   Keturunan dari{' '}
                   <button
@@ -164,11 +190,11 @@ export const MemberDetailPanel: React.FC<MemberDetailPanelProps> = ({
 
         {/* Focus Navigation Button */}
         <button
-          onClick={() => onFocusMember(member.id)}
+          onClick={() => onFocusMember(isCompanion && companionPartner ? companionPartner.id : member.id)}
           className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-[var(--line)] bg-[var(--surface-secondary)] text-xs sm:text-sm font-medium text-[var(--ink)] hover:border-[var(--accent)] hover:text-[var(--accent)] transition-colors cursor-pointer self-start md:self-center"
         >
           <GitBranch className="w-4 h-4" />
-          Fokuskan Cabang Ini
+          {isCompanion ? 'Lihat Pasangan di Pohon' : 'Fokuskan Cabang Ini'}
         </button>
       </div>
 
@@ -216,17 +242,55 @@ export const MemberDetailPanel: React.FC<MemberDetailPanelProps> = ({
               Pasangan Hidup
             </span>
             {linkedSpouse ? (
-              <button
-                onClick={() => onFocusMember(linkedSpouse.id)}
-                className="text-[var(--accent)] font-semibold hover:underline inline-flex items-center gap-1 cursor-pointer"
-              >
-                {linkedSpouse.name}
-                <ExternalLink className="w-3 h-3" />
-              </button>
-            ) : (
+              <div className="flex items-center gap-2 mt-1">
+                {/* Mini Avatar Thumbnail */}
+                <button
+                  type="button"
+                  onClick={() => onFocusMember(linkedSpouse.id)}
+                  className="relative shrink-0 cursor-pointer group"
+                  title={`Lihat profil ${linkedSpouse.name}`}
+                >
+                  {linkedSpouse.avatarUrl ? (
+                    <img
+                      src={getDisplayImageUrl(linkedSpouse.avatarUrl)}
+                      alt={linkedSpouse.name}
+                      referrerPolicy="no-referrer"
+                      className="w-7 h-7 rounded-full object-cover border border-[var(--line)] group-hover:border-[var(--accent)]"
+                    />
+                  ) : (
+                    <div
+                      className={`w-7 h-7 rounded-full flex items-center justify-center text-[11px] font-bold border border-[var(--line)] ${
+                        linkedSpouse.gender === 'female'
+                          ? 'bg-rose-100 dark:bg-rose-950/40 text-rose-700 dark:text-rose-300'
+                          : linkedSpouse.gender === 'male'
+                          ? 'bg-blue-100 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300'
+                          : 'bg-emerald-100 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300'
+                      }`}
+                    >
+                      {linkedSpouse.name.charAt(0).toUpperCase()}
+                    </div>
+                  )}
+                </button>
+                <div className="flex items-center gap-1.5 flex-wrap">
+                  <button
+                    onClick={() => onFocusMember(linkedSpouse.id)}
+                    className="text-[var(--accent)] font-semibold hover:underline inline-flex items-center gap-1 cursor-pointer"
+                  >
+                    {linkedSpouse.name}
+                    <ExternalLink className="w-3 h-3" />
+                  </button>
+                  <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-pink-100 text-pink-700 dark:bg-pink-950/50 dark:text-pink-300 font-semibold border border-pink-200 dark:border-pink-800">
+                    {linkedSpouse.isInLaw ? 'Menantu' : 'Pasangan Terdaftar'}
+                  </span>
+                </div>
+              </div>
+            ) : spouseDisplayName ? (
               <span className="text-[var(--ink)] font-medium">
-                {member.spouse || '-'}
+                {spouseDisplayName}{' '}
+                <span className="text-[10px] text-[var(--mute)] font-normal">(Belum Terdaftar)</span>
               </span>
+            ) : (
+              <span className="text-[var(--ink)] font-medium">-</span>
             )}
           </div>
         </div>
@@ -278,12 +342,42 @@ export const MemberDetailPanel: React.FC<MemberDetailPanelProps> = ({
       {isAdmin && (
         <div className="flex flex-wrap items-center gap-2 pt-3 border-t border-[var(--line)]">
           <button
-            onClick={() => onAddChild(member.id)}
+            onClick={() => onAddChild(isCompanion && companionPartner ? companionPartner.id : member.id)}
             className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[var(--accent)] hover:bg-[var(--accent-hover)] text-white text-xs sm:text-sm font-medium transition-colors shadow-xs cursor-pointer"
           >
             <Plus className="w-4 h-4" />
             + Tambah Anak
           </button>
+
+          {!linkedSpouse && onAddSpouse && (
+            <button
+              onClick={() => onAddSpouse(member)}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-pink-50 dark:bg-pink-950/40 text-pink-700 dark:text-pink-300 hover:bg-pink-100 dark:hover:bg-pink-950/60 border border-pink-200 dark:border-pink-900 text-xs sm:text-sm font-medium transition-colors cursor-pointer shadow-2xs"
+              title="Daftarkan profil pasangan/menantu untuk anggota ini"
+            >
+              <Heart className="w-3.5 h-3.5 text-pink-600 dark:text-pink-400" />
+              + Tambah Pasangan / Menantu
+            </button>
+          )}
+
+          {linkedSpouse && onUnlinkSpouse && (
+            <button
+              onClick={() => {
+                if (
+                  window.confirm(
+                    `Lepas hubungan pasangan antara "${member.name}" dan "${linkedSpouse.name}"?\n\nKedua profil anggota akan tetap tersimpan, hanya tautan status pernikahan yang diputuskan.`
+                  )
+                ) {
+                  onUnlinkSpouse(member.id, linkedSpouse.id);
+                }
+              }}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[var(--surface-secondary)] hover:bg-rose-50 dark:hover:bg-rose-950/40 text-[var(--ink)] hover:text-rose-600 dark:hover:text-rose-400 text-xs sm:text-sm font-medium border border-[var(--line)] hover:border-rose-300 dark:hover:border-rose-800 transition-colors cursor-pointer"
+              title="Putuskan hubungan pernikahan dua arah tanpa menghapus profil"
+            >
+              <Link2Off className="w-3.5 h-3.5 text-rose-500" />
+              Lepas Pasangan
+            </button>
+          )}
 
           <button
             onClick={() => onEdit(member)}
@@ -293,13 +387,15 @@ export const MemberDetailPanel: React.FC<MemberDetailPanelProps> = ({
             Edit Data
           </button>
 
-          <button
-            onClick={() => onMoveParent(member)}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[var(--surface-secondary)] hover:bg-[var(--line)] text-[var(--ink)] text-xs sm:text-sm font-medium border border-[var(--line)] transition-colors cursor-pointer"
-          >
-            <ArrowRightLeft className="w-3.5 h-3.5 text-[var(--mute)]" />
-            Pindah Orang Tua
-          </button>
+          {!isCompanion && (
+            <button
+              onClick={() => onMoveParent(member)}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[var(--surface-secondary)] hover:bg-[var(--line)] text-[var(--ink)] text-xs sm:text-sm font-medium border border-[var(--line)] transition-colors cursor-pointer"
+            >
+              <ArrowRightLeft className="w-3.5 h-3.5 text-[var(--mute)]" />
+              Pindah Orang Tua
+            </button>
+          )}
 
           {/* Delete Action with Child Safety Guard */}
           <div className="ml-auto">

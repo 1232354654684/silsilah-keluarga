@@ -32,11 +32,15 @@ import {
   Check,
   EyeOff,
   Upload,
+  HeartHandshake,
+  Link2,
 } from 'lucide-react';
 import { exportMembersToCSV } from '../../utils/export';
 import { downloadMemberTemplate, exportMembersToExcel } from '../../utils/excelTemplate';
 import { ImportMembersModal } from './ImportMembersModal';
+import { SpouseAuditModal } from './SpouseAuditModal';
 import { getDisplayImageUrl } from '../../utils/googleDrive';
+import { getSpouseDisplayName, SpouseLinkUpdate } from '../../utils/spouse';
 
 const MemberAvatarThumbnail: React.FC<{ member: Member }> = ({ member }) => {
   const [imgErr, setImgErr] = useState(false);
@@ -101,6 +105,7 @@ interface AdminDashboardProps {
     fileName: string,
     onProgress: (p: { stage: string; current: number; total: number; percent: number }) => void
   ) => Promise<void>;
+  onApplySpouseFixes: (updates: SpouseLinkUpdate[], auditMessage: string) => Promise<void>;
 }
 
 export const AdminDashboard: React.FC<AdminDashboardProps> = ({
@@ -121,12 +126,14 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   onDeleteAdmin,
   onResetAdminPassword,
   onImportMembers,
+  onApplySpouseFixes,
 }) => {
   const { currentUser, adminProfile, isSuperAdmin, changeMyPassword, logAuditAction } = useAuth();
   const [subTab, setSubTab] = useState<'members' | 'users' | 'audit' | 'password'>('members');
   const [memberSearch, setMemberSearch] = useState('');
   const [userActionMsg, setUserActionMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const [isImportModalOpen, setIsImportModalOpen] = useState(false);
+  const [isSpouseAuditModalOpen, setIsSpouseAuditModalOpen] = useState(false);
 
   // Password state in admin dashboard
   const [newPass, setNewPass] = useState('');
@@ -400,6 +407,14 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
 
         <div className="flex flex-wrap items-center gap-2">
           <button
+            onClick={() => setIsSpouseAuditModalOpen(true)}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-pink-500/40 bg-pink-50 dark:bg-pink-950/30 text-pink-700 dark:text-pink-300 hover:bg-pink-100 dark:hover:bg-pink-950/50 text-xs sm:text-sm font-semibold transition-colors cursor-pointer shadow-2xs"
+            title="Periksa dan perbaiki inkonsistensi data pasangan (tautan satu arah, perbedaan nama, dsb.)"
+          >
+            <HeartHandshake className="w-4 h-4 text-pink-600 dark:text-pink-400" />
+            Periksa Sinkronisasi Pasangan
+          </button>
+          <button
             onClick={() => setIsImportModalOpen(true)}
             className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-blue-600/40 bg-blue-50 dark:bg-blue-950/30 text-blue-700 dark:text-blue-300 hover:bg-blue-100 dark:hover:bg-blue-950/50 text-xs sm:text-sm font-semibold transition-colors cursor-pointer shadow-2xs"
             title="Import data anggota dari file Excel (.xlsx / .xls / .csv)"
@@ -561,7 +576,23 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                         {m.birthDate || '-'}
                       </td>
                       <td className="py-3 px-3 text-[var(--mute)]">
-                        {m.spouse || '-'}
+                        {(() => {
+                          const spouseName = getSpouseDisplayName(m, members);
+                          if (!spouseName) return '-';
+                          return (
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                              <span>{spouseName}</span>
+                              {m.spouseMemberId && (
+                                <span
+                                  className="text-[10px] px-1.5 py-0.2 rounded-full bg-pink-100 dark:bg-pink-950/60 text-pink-700 dark:text-pink-300 font-semibold inline-flex items-center gap-0.5"
+                                  title="Terhubung timbal balik ke profil anggota"
+                                >
+                                  <Link2 className="w-2.5 h-2.5" /> Terhubung
+                                </span>
+                              )}
+                            </div>
+                          );
+                        })()}
                       </td>
                       <td className="py-3 px-3 text-right">
                         <div className="flex items-center justify-end gap-1.5">
@@ -945,6 +976,15 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
           existingMembers={members}
           currentAdminName={adminProfile?.name || currentUser?.email || 'Admin'}
           onImportSuccess={onImportMembers}
+        />
+      )}
+
+      {isSpouseAuditModalOpen && (
+        <SpouseAuditModal
+          isOpen={isSpouseAuditModalOpen}
+          onClose={() => setIsSpouseAuditModalOpen(false)}
+          members={members}
+          onApplyFix={onApplySpouseFixes}
         />
       )}
     </div>

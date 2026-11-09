@@ -64,6 +64,7 @@ export function cleanMemberData(raw: Record<string, any>): Record<string, any> {
     deathDate: isDeceased ? normalizeStringOrNull(raw.deathDate) : null,
     spouse: normalizeStringOrNull(raw.spouse),
     spouseMemberId: normalizeStringOrNull(raw.spouseMemberId),
+    isInLaw: Boolean(raw.isInLaw),
     address: normalizeStringOrNull(raw.address),
     avatarUrl: normalizeStringOrNull(raw.avatarUrl),
     notes: normalizeStringOrNull(raw.notes),

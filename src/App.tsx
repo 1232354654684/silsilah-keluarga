@@ -34,6 +34,7 @@ import {
   INITIAL_SAMPLE_NEWS,
 } from './utils/sampleData';
 import { cleanData, cleanMemberData } from './utils/cleanData';
+import { buildSpouseLinkWrites, SpouseLinkUpdate } from './utils/spouse';
 import { CheckCircle2, AlertCircle } from 'lucide-react';
 
 function MainApp() {
@@ -90,6 +91,8 @@ function MainApp() {
   const [isMemberModalOpen, setIsMemberModalOpen] = useState(false);
   const [memberToEdit, setMemberToEdit] = useState<Member | null>(null);
   const [defaultParentId, setDefaultParentId] = useState<string | null | undefined>(undefined);
+  const [defaultSpouseId, setDefaultSpouseId] = useState<string | null | undefined>(undefined);
+  const [initialIsInLaw, setInitialIsInLaw] = useState<boolean>(false);
 
   const [isMoveParentModalOpen, setIsMoveParentModalOpen] = useState(false);
   const [memberToMove, setMemberToMove] = useState<Member | null>(null);
@@ -246,7 +249,42 @@ function MainApp() {
 
     const cleanedMember = cleanMemberData(rawMember) as Member;
 
-    await setDoc(doc(db, 'members', memberId), cleanedMember);
+    // Build atomic two-way spouse updates (links & unlinks)
+    const spouseWrites = buildSpouseLinkWrites(
+      memberId,
+      cleanedMember.spouseMemberId || null,
+      members,
+      cleanedMember.spouse || null
+    );
+
+    // Apply main member spouse changes if computed
+    const mySpouseWrite = spouseWrites.find((w) => w.memberId === memberId);
+    if (mySpouseWrite) {
+      cleanedMember.spouseMemberId = mySpouseWrite.data.spouseMemberId;
+      cleanedMember.spouse = mySpouseWrite.data.spouse;
+    }
+
+    const batch = writeBatch(db);
+    batch.set(doc(db, 'members', memberId), cleanedMember);
+
+    // Update other partner(s) atomically (linking or unlinking)
+    spouseWrites.forEach((w) => {
+      if (w.memberId !== memberId) {
+        const partner = members.find((m) => m.id === w.memberId);
+        if (partner) {
+          const cleanedPartner = cleanMemberData({
+            ...partner,
+            spouseMemberId: w.data.spouseMemberId,
+            spouse: w.data.spouse,
+            updatedAt: new Date().toISOString(),
+            updatedBy: adminProfile?.name || currentUser?.email || 'Admin',
+          });
+          batch.set(doc(db, 'members', w.memberId), cleanedPartner);
+        }
+      }
+    });
+
+    await batch.commit();
 
     if (cleanedMember.parentId && !isEdit) {
       setFocusedMemberId(cleanedMember.parentId);
@@ -261,10 +299,15 @@ function MainApp() {
     });
     setTimeout(() => setToast(null), 4000);
 
+    const spouseChanged =
+      isEdit && cleanedMember.spouseMemberId !== (memberToEdit?.spouseMemberId || null);
+
     await logAuditAction(
       'tree_change',
-      isEdit ? 'EDIT_ANGGOTA' : 'TAMBAH_ANGGOTA',
-      `${isEdit ? 'Memperbarui' : 'Menambahkan'} anggota silsilah "${cleanedMember.name}"`,
+      isEdit ? (spouseChanged ? 'UBAH_PASANGAN' : 'EDIT_ANGGOTA') : 'TAMBAH_ANGGOTA',
+      `${isEdit ? 'Memperbarui' : 'Menambahkan'} anggota silsilah "${cleanedMember.name}"${
+        cleanedMember.spouse ? ` (Pasangan: ${cleanedMember.spouse})` : ''
+      }`,
       memberId,
       cleanedMember.name
     );
@@ -273,23 +316,130 @@ function MainApp() {
   const handleDeleteMember = async (member: Member) => {
     const hasChildren = members.some((m) => m.parentId === member.id);
     if (hasChildren) {
-      alert('Tidak dapat menghapus anggota yang masih memiliki keturunan/anak. Hapus atau pindahkan anak-anaknya terlebih dahulu.');
+      alert(
+        'Tidak dapat menghapus anggota yang masih memiliki keturunan/anak. Hapus atau pindahkan anak-anaknya terlebih dahulu.'
+      );
       return;
     }
 
-    await deleteDoc(doc(db, 'members', member.id));
+    const partner = member.spouseMemberId ? members.find((m) => m.id === member.spouseMemberId) || null : null;
+    let deletePartnerToo = false;
 
-    if (focusedMemberId === member.id) {
+    if (partner && partner.isInLaw) {
+      deletePartnerToo = window.confirm(
+        `Anggota ini memiliki pasangan dari luar keluarga (menantu): "${partner.name}".\n\nApakah Anda ingin ikut menghapus data profil menantu tersebut?`
+      );
+    }
+
+    const batch = writeBatch(db);
+    batch.delete(doc(db, 'members', member.id));
+
+    if (deletePartnerToo && partner) {
+      batch.delete(doc(db, 'members', partner.id));
+    } else if (partner && partner.spouseMemberId === member.id) {
+      // If not deleted, unlink the spouse atomically
+      const updatedPartner = cleanMemberData({
+        ...partner,
+        spouseMemberId: null,
+        spouse: null,
+        updatedAt: new Date().toISOString(),
+        updatedBy: adminProfile?.name || currentUser?.email || 'Admin',
+      });
+      batch.set(doc(db, 'members', partner.id), updatedPartner);
+    }
+
+    await batch.commit();
+
+    if (focusedMemberId === member.id || (deletePartnerToo && partner && focusedMemberId === partner.id)) {
       setFocusedMemberId(member.parentId || null);
     }
 
     await logAuditAction(
       'tree_change',
       'HAPUS_ANGGOTA',
-      `Menghapus anggota silsilah "${member.name}"`,
+      `Menghapus anggota silsilah "${member.name}"${
+        deletePartnerToo && partner ? ` beserta menantu "${partner.name}"` : ''
+      }`,
       member.id,
       member.name
     );
+  };
+
+  const handleUnlinkSpouse = async (memberAId: string, memberBId: string) => {
+    const memberA = members.find((m) => m.id === memberAId);
+    const memberB = members.find((m) => m.id === memberBId);
+    if (!memberA || !memberB) return;
+
+    const batch = writeBatch(db);
+    const updatedA = cleanMemberData({
+      ...memberA,
+      spouseMemberId: null,
+      spouse: null,
+      updatedAt: new Date().toISOString(),
+      updatedBy: adminProfile?.name || currentUser?.email || 'Admin',
+    });
+    const updatedB = cleanMemberData({
+      ...memberB,
+      spouseMemberId: null,
+      spouse: null,
+      updatedAt: new Date().toISOString(),
+      updatedBy: adminProfile?.name || currentUser?.email || 'Admin',
+    });
+
+    batch.set(doc(db, 'members', memberAId), updatedA);
+    batch.set(doc(db, 'members', memberBId), updatedB);
+
+    await batch.commit();
+
+    setToast({
+      type: 'success',
+      message: `Hubungan pasangan antara "${memberA.name}" dan "${memberB.name}" berhasil dilepas.`,
+    });
+    setTimeout(() => setToast(null), 4000);
+
+    await logAuditAction(
+      'tree_change',
+      'LEPAS_PASANGAN',
+      `Memutuskan hubungan pernikahan antara "${memberA.name}" dan "${memberB.name}"`,
+      memberAId,
+      memberA.name
+    );
+  };
+
+  const handleApplySpouseFixes = async (updates: SpouseLinkUpdate[], auditMessage: string) => {
+    const batch = writeBatch(db);
+    updates.forEach((u) => {
+      const existing = members.find((m) => m.id === u.memberId);
+      if (existing) {
+        const cleaned = cleanMemberData({
+          ...existing,
+          spouse: u.data.spouse !== undefined ? u.data.spouse : existing.spouse,
+          spouseMemberId:
+            u.data.spouseMemberId !== undefined ? u.data.spouseMemberId : existing.spouseMemberId,
+          updatedAt: new Date().toISOString(),
+          updatedBy: adminProfile?.name || currentUser?.email || 'Admin',
+        });
+        batch.set(doc(db, 'members', u.memberId), cleaned);
+      }
+    });
+
+    await batch.commit();
+
+    setToast({
+      type: 'success',
+      message: 'Perbaikan sinkronisasi relasi pasangan berhasil disimpan!',
+    });
+    setTimeout(() => setToast(null), 4000);
+
+    await logAuditAction('tree_change', 'SINKRONISASI_PASANGAN', auditMessage);
+  };
+
+  const handleAddSpouse = (targetMember: Member) => {
+    setMemberToEdit(null);
+    setDefaultParentId(undefined);
+    setDefaultSpouseId(targetMember.id);
+    setInitialIsInLaw(true);
+    setIsMemberModalOpen(true);
   };
 
   const handleSaveMoveParent = async (memberId: string, newParentId: string | null) => {
@@ -594,11 +744,17 @@ function MainApp() {
             onAddMember={(parentId) => {
               setMemberToEdit(null);
               setDefaultParentId(parentId);
+              setDefaultSpouseId(undefined);
+              setInitialIsInLaw(false);
               setIsMemberModalOpen(true);
             }}
+            onAddSpouse={handleAddSpouse}
+            onUnlinkSpouse={handleUnlinkSpouse}
             onEditMember={(m) => {
               setMemberToEdit(m);
               setDefaultParentId(m.parentId);
+              setDefaultSpouseId(m.spouseMemberId || undefined);
+              setInitialIsInLaw(!!m.isInLaw);
               setIsMemberModalOpen(true);
             }}
             onMoveParent={(m) => {
@@ -652,11 +808,15 @@ function MainApp() {
             onAddMember={() => {
               setMemberToEdit(null);
               setDefaultParentId(undefined);
+              setDefaultSpouseId(undefined);
+              setInitialIsInLaw(false);
               setIsMemberModalOpen(true);
             }}
             onEditMember={(m) => {
               setMemberToEdit(m);
               setDefaultParentId(m.parentId);
+              setDefaultSpouseId(m.spouseMemberId || undefined);
+              setInitialIsInLaw(!!m.isInLaw);
               setIsMemberModalOpen(true);
             }}
             onDeleteMember={handleDeleteMember}
@@ -685,6 +845,7 @@ function MainApp() {
             onDeleteAdmin={handleDeleteAdmin}
             onResetAdminPassword={handleResetAdminPassword}
             onImportMembers={handleImportMembers}
+            onApplySpouseFixes={handleApplySpouseFixes}
           />
         )}
       </main>
@@ -711,10 +872,15 @@ function MainApp() {
         onClose={() => {
           setIsMemberModalOpen(false);
           setMemberToEdit(null);
+          setDefaultParentId(undefined);
+          setDefaultSpouseId(undefined);
+          setInitialIsInLaw(false);
         }}
         onSave={handleSaveMember}
         memberToEdit={memberToEdit}
         defaultParentId={defaultParentId}
+        defaultSpouseId={defaultSpouseId}
+        initialIsInLaw={initialIsInLaw}
         allMembers={members}
       />
 

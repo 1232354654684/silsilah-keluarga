@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { Member, Gender } from '../../types';
-import { X, Upload, HelpCircle, Eye, EyeOff, Image as ImageIcon, CheckCircle2, AlertCircle } from 'lucide-react';
+import { X, Upload, HelpCircle, Eye, EyeOff, Image as ImageIcon, CheckCircle2, AlertCircle, Heart } from 'lucide-react';
 import { getDisplayImageUrl, getPhotoLinkStatus } from '../../utils/googleDrive';
+import { canBeSpouses } from '../../utils/spouse';
 
 interface MemberModalProps {
   isOpen: boolean;
@@ -10,6 +11,8 @@ interface MemberModalProps {
   memberToEdit: Member | null;
   defaultParentId?: string | null;
   allMembers: Member[];
+  defaultSpouseId?: string | null;
+  initialIsInLaw?: boolean;
 }
 
 export const MemberModal: React.FC<MemberModalProps> = ({
@@ -19,6 +22,8 @@ export const MemberModal: React.FC<MemberModalProps> = ({
   memberToEdit,
   defaultParentId,
   allMembers,
+  defaultSpouseId,
+  initialIsInLaw = false,
 }) => {
   const [name, setName] = useState('');
   const [gender, setGender] = useState<Gender>('male');
@@ -29,6 +34,7 @@ export const MemberModal: React.FC<MemberModalProps> = ({
   const [deathDate, setDeathDate] = useState('');
   const [spouse, setSpouse] = useState('');
   const [spouseMemberId, setSpouseMemberId] = useState('');
+  const [isInLaw, setIsInLaw] = useState(false);
   const [address, setAddress] = useState('');
   const [avatarUrl, setAvatarUrl] = useState('');
   const [notes, setNotes] = useState('');
@@ -65,20 +71,33 @@ export const MemberModal: React.FC<MemberModalProps> = ({
       setDeathDate(memberToEdit.deathDate || '');
       setSpouse(memberToEdit.spouse || '');
       setSpouseMemberId(memberToEdit.spouseMemberId || '');
+      setIsInLaw(!!memberToEdit.isInLaw);
       setAddress(memberToEdit.address || '');
       setAvatarUrl(memberToEdit.avatarUrl || '');
       setNotes(memberToEdit.notes || '');
       setHideAddressAndBirth(!!memberToEdit.hideAddressAndBirth);
     } else {
       setName('');
-      setGender('male');
+      setGender('female'); // Often if adding spouse to male, female is nice default, but let's check defaultSpouseId
       setParentId(defaultParentId || '');
       setBirthPlace('');
       setBirthDate('');
       setIsDeceased(false);
       setDeathDate('');
-      setSpouse('');
-      setSpouseMemberId('');
+      
+      if (defaultSpouseId) {
+        setSpouseMemberId(defaultSpouseId);
+        const partner = allMembers.find((m) => m.id === defaultSpouseId);
+        setSpouse(partner ? partner.name : '');
+        setGender(partner?.gender === 'male' ? 'female' : 'male');
+        setIsInLaw(initialIsInLaw ?? true);
+      } else {
+        setSpouse('');
+        setSpouseMemberId('');
+        setGender('male');
+        setIsInLaw(initialIsInLaw ?? false);
+      }
+      
       setAddress('');
       setAvatarUrl('');
       setNotes('');
@@ -87,7 +106,7 @@ export const MemberModal: React.FC<MemberModalProps> = ({
     setError(null);
     setSuccessMsg(null);
     setImageLoadFailed(false);
-  }, [memberToEdit, defaultParentId, isOpen]);
+  }, [memberToEdit, defaultParentId, defaultSpouseId, initialIsInLaw, isOpen]);
 
   if (!isOpen) return null;
 
@@ -121,6 +140,7 @@ export const MemberModal: React.FC<MemberModalProps> = ({
         deathDate: isDeceased && deathDate ? deathDate : null,
         spouse: spouse.trim() || null,
         spouseMemberId: spouseMemberId.trim() || null,
+        isInLaw: isInLaw ? true : null,
         address: address.trim() || null,
         avatarUrl: avatarUrl.trim() || null,
         notes: notes.trim() || null,
@@ -145,6 +165,8 @@ export const MemberModal: React.FC<MemberModalProps> = ({
   const previewAvatar = avatarUrl ? getDisplayImageUrl(avatarUrl) : '';
   const photoStatus = getPhotoLinkStatus(avatarUrl);
 
+  const partnerForSpouse = defaultSpouseId ? allMembers.find((m) => m.id === defaultSpouseId) : null;
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs overflow-y-auto">
       <div className="bg-[var(--surface)] border border-[var(--line)] rounded-[14px] w-full max-w-xl max-h-[90vh] overflow-y-auto shadow-2xl flex flex-col text-[var(--ink)] my-auto animate-in fade-in zoom-in-95 duration-150">
@@ -152,10 +174,16 @@ export const MemberModal: React.FC<MemberModalProps> = ({
         <div className="flex items-center justify-between px-6 py-4 border-b border-[var(--line)] sticky top-0 bg-[var(--surface)] z-10">
           <div>
             <h3 className="text-lg font-bold">
-              {memberToEdit ? 'Edit Data Anggota' : 'Tambah Anggota Keluarga'}
+              {partnerForSpouse
+                ? `Tambah Pasangan untuk ${partnerForSpouse.name}`
+                : memberToEdit
+                ? 'Edit Data Anggota'
+                : 'Tambah Anggota Keluarga'}
             </h3>
             <p className="text-xs text-[var(--mute)]">
-              {memberToEdit
+              {partnerForSpouse
+                ? `Lengkapi biodata pasangan hidup untuk ditautkan secara dua arah dengan ${partnerForSpouse.name}`
+                : memberToEdit
                 ? 'Perbarui informasi silsilah anggota keluarga'
                 : 'Lengkapi biodata anggota baru untuk ditambahkan ke silsilah'}
             </p>
@@ -215,37 +243,39 @@ export const MemberModal: React.FC<MemberModalProps> = ({
             </div>
           </div>
 
-          {/* Orang Tua (Parent) Selector */}
-          <div>
-            <div className="flex items-center justify-between mb-1">
-              <label className="block text-xs font-semibold text-[var(--mute)]">
-                Orang Tua dalam Silsilah
-              </label>
-              {!parentId && (
-                <span className="text-[10px] font-semibold text-emerald-700 dark:text-emerald-300 bg-emerald-100 dark:bg-emerald-950/50 px-2 py-0.5 rounded-full border border-emerald-200 dark:border-emerald-800">
-                  Akar Pohon Silsilah
-                </span>
-              )}
+          {/* Orang Tua (Parent) Selector - Sembunyikan jika mode tambah pasangan */}
+          {!partnerForSpouse && (
+            <div>
+              <div className="flex items-center justify-between mb-1">
+                <label className="block text-xs font-semibold text-[var(--mute)]">
+                  Orang Tua dalam Silsilah
+                </label>
+                {!parentId && (
+                  <span className="text-[10px] font-semibold text-emerald-700 dark:text-emerald-300 bg-emerald-100 dark:bg-emerald-950/50 px-2 py-0.5 rounded-full border border-emerald-200 dark:border-emerald-800">
+                    Akar Pohon Silsilah
+                  </span>
+                )}
+              </div>
+              <select
+                value={parentId}
+                onChange={(e) => setParentId(e.target.value)}
+                className="w-full px-3 py-2 rounded-lg border border-[var(--line)] bg-[var(--bg)] text-sm focus:border-[var(--accent)] focus:outline-none"
+              >
+                <option value="">Tidak ada (Akar Pohon / Leluhur Utama)</option>
+                {allMembers
+                  .filter((m) => !forbiddenParentIds.has(m.id))
+                  .sort((a, b) => a.name.localeCompare(b.name))
+                  .map((m) => (
+                    <option key={m.id} value={m.id}>
+                      {m.name} {m.birthDate ? `(${m.birthDate.split('-')[0]})` : ''}
+                    </option>
+                  ))}
+              </select>
+              <p className="text-[11px] text-[var(--mute)] mt-1">
+                * Jika pilihan orang tua tidak dipilih, anggota akan disimpan sebagai akar pohon silsilah (leluhur utama).
+              </p>
             </div>
-            <select
-              value={parentId}
-              onChange={(e) => setParentId(e.target.value)}
-              className="w-full px-3 py-2 rounded-lg border border-[var(--line)] bg-[var(--bg)] text-sm focus:border-[var(--accent)] focus:outline-none"
-            >
-              <option value="">Tidak ada (Akar Pohon / Leluhur Utama)</option>
-              {allMembers
-                .filter((m) => !forbiddenParentIds.has(m.id))
-                .sort((a, b) => a.name.localeCompare(b.name))
-                .map((m) => (
-                  <option key={m.id} value={m.id}>
-                    {m.name} {m.birthDate ? `(${m.birthDate.split('-')[0]})` : ''}
-                  </option>
-                ))}
-            </select>
-            <p className="text-[11px] text-[var(--mute)] mt-1">
-              * Jika pilihan orang tua tidak dipilih, anggota akan disimpan sebagai akar pohon silsilah (leluhur utama).
-            </p>
-          </div>
+          )}
 
           {/* Tempat & Tanggal Lahir */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -305,45 +335,106 @@ export const MemberModal: React.FC<MemberModalProps> = ({
           </div>
 
           {/* Pasangan (Nama Teks atau Terhubung ke Member lain) */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <div>
-              <label className="block text-xs font-semibold text-[var(--mute)] mb-1">
-                Nama Pasangan (Teks)
-              </label>
-              <input
-                type="text"
-                value={spouse}
-                onChange={(e) => setSpouse(e.target.value)}
-                placeholder="Contoh: Siti Aminah"
-                className="w-full px-3 py-2 rounded-lg border border-[var(--line)] bg-[var(--bg)] text-sm focus:border-[var(--accent)] focus:outline-none"
-              />
+          <div className="p-3.5 rounded-xl border border-[var(--line)] bg-[var(--surface-secondary)]/40 space-y-3">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-bold text-[var(--ink)] flex items-center gap-1.5">
+                <Heart className="w-4 h-4 text-pink-500" />
+                Data Pasangan Hidup
+              </span>
+              {spouseMemberId && (
+                <span className="text-[10px] font-semibold text-pink-700 dark:text-pink-300 bg-pink-100 dark:bg-pink-950/60 px-2 py-0.5 rounded-full border border-pink-200 dark:border-pink-800">
+                  Tautkan Profil Lengkap
+                </span>
+              )}
             </div>
 
-            <div>
-              <label className="block text-xs font-semibold text-[var(--mute)] mb-1">
-                Atau Hubungkan Pasangan Terdaftar
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                <label className="block text-xs font-semibold text-[var(--mute)] mb-1">
+                  Hubungkan Profil Pasangan Terdaftar
+                </label>
+                <select
+                  value={spouseMemberId}
+                  onChange={(e) => {
+                    const newId = e.target.value;
+                    setSpouseMemberId(newId);
+                    if (newId) {
+                      const found = allMembers.find((m) => m.id === newId);
+                      if (found) {
+                        setSpouse(found.name);
+                        // Suggest opposite gender if unset
+                        if (gender === found.gender) {
+                          setGender(found.gender === 'male' ? 'female' : 'male');
+                        }
+                      }
+                    }
+                  }}
+                  className="w-full px-3 py-2 rounded-lg border border-[var(--line)] bg-[var(--bg)] text-sm focus:border-[var(--accent)] focus:outline-none"
+                >
+                  <option value="">-- Pilih anggota (Tautan Dua Arah) --</option>
+                  {allMembers
+                    .filter(
+                      (m) =>
+                        m.id !== memberToEdit?.id &&
+                        canBeSpouses(memberToEdit?.id || null, m.id, allMembers) &&
+                        (!m.spouseMemberId ||
+                          m.spouseMemberId === memberToEdit?.id ||
+                          m.spouseMemberId === spouseMemberId)
+                    )
+                    .sort((a, b) => a.name.localeCompare(b.name))
+                    .map((m) => (
+                      <option key={m.id} value={m.id}>
+                        {m.name} {m.birthDate ? `(${m.birthDate.split('-')[0]})` : ''}
+                      </option>
+                    ))}
+                </select>
+                <p className="text-[11px] text-[var(--mute)] mt-1">
+                  * Otomatis menghubungkan timbal balik kedua profil pasangan.
+                </p>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-[var(--mute)] mb-1">
+                  Nama Pasangan (Teks)
+                </label>
+                <input
+                  type="text"
+                  value={spouse}
+                  onChange={(e) => setSpouse(e.target.value)}
+                  readOnly={!!spouseMemberId}
+                  placeholder={spouseMemberId ? 'Mengikuti profil terhubung' : 'Contoh: Siti Aminah'}
+                  className={`w-full px-3 py-2 rounded-lg border border-[var(--line)] text-sm focus:outline-none ${
+                    spouseMemberId
+                      ? 'bg-[var(--surface-secondary)] text-[var(--mute)] cursor-not-allowed'
+                      : 'bg-[var(--bg)] text-[var(--ink)] focus:border-[var(--accent)]'
+                  }`}
+                />
+                <p className="text-[11px] text-[var(--mute)] mt-1">
+                  {spouseMemberId
+                    ? 'Terkunci (sinkron dari profil terpilih).'
+                    : 'Gunakan jika pasangan belum dibuat profilnya.'}
+                </p>
+              </div>
+            </div>
+
+            {/* In-Law Checkbox */}
+            <div className="pt-2 border-t border-[var(--line)]/60">
+              <label className="flex items-start gap-2.5 cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  checked={isInLaw}
+                  onChange={(e) => setIsInLaw(e.target.checked)}
+                  className="w-4 h-4 mt-0.5 rounded text-[var(--accent)] focus:ring-[var(--accent)]"
+                />
+                <div>
+                  <span className="text-xs sm:text-sm font-semibold text-[var(--ink)] flex items-center gap-1.5">
+                    Pasangan dari luar silsilah (Menantu)
+                  </span>
+                  <p className="text-[11px] text-[var(--mute)] leading-relaxed mt-0.5">
+                    Centang jika anggota ini bergabung ke keluarga besar melalui pernikahan. Anggota ini akan ditampilkan mendampingi pasangannya di pohon silsilah tanpa menjadi akar pohon terpisah.
+                  </p>
+                </div>
               </label>
-              <select
-                value={spouseMemberId}
-                onChange={(e) => {
-                  setSpouseMemberId(e.target.value);
-                  if (e.target.value) {
-                    const found = allMembers.find((m) => m.id === e.target.value);
-                    if (found && !spouse) setSpouse(found.name);
-                  }
-                }}
-                className="w-full px-3 py-2 rounded-lg border border-[var(--line)] bg-[var(--bg)] text-sm focus:border-[var(--accent)] focus:outline-none"
-              >
-                <option value="">-- Pilih dari anggota lain (opsional) --</option>
-                {allMembers
-                  .filter((m) => m.id !== memberToEdit?.id)
-                  .sort((a, b) => a.name.localeCompare(b.name))
-                  .map((m) => (
-                    <option key={m.id} value={m.id}>
-                      {m.name}
-                    </option>
-                  ))}
-              </select>
             </div>
           </div>
 

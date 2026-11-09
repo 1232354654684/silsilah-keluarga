@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
 import { Member } from '../../types';
 import { getDisplayImageUrl } from '../../utils/googleDrive';
-import { User, Users } from 'lucide-react';
+import { getSpouseDisplayName } from '../../utils/spouse';
+import { User, Users, Heart } from 'lucide-react';
 
 interface MemberCardProps {
   member: Member;
@@ -10,6 +11,8 @@ interface MemberCardProps {
   totalDescendantsCount: number;
   onClick: () => void;
   isPublicView?: boolean;
+  allMembers?: Member[];
+  hideSpouseText?: boolean;
 }
 
 export const MemberCard: React.FC<MemberCardProps> = ({
@@ -19,6 +22,8 @@ export const MemberCard: React.FC<MemberCardProps> = ({
   totalDescendantsCount,
   onClick,
   isPublicView = false,
+  allMembers = [],
+  hideSpouseText = false,
 }) => {
   const [imageError, setImageError] = useState(false);
   const displayImage = member.avatarUrl ? getDisplayImageUrl(member.avatarUrl) : '';
@@ -41,6 +46,12 @@ export const MemberCard: React.FC<MemberCardProps> = ({
     lifespan = member.isDeceased ? 'Wafat' : '';
   }
 
+  const hasLinkedSpouse = Boolean(
+    member.spouseMemberId && allMembers.some((m) => m.id === member.spouseMemberId)
+  );
+  // Show fallback text only if spouse is NOT registered as a linked profile
+  const fallbackSpouseText = !hasLinkedSpouse && member.spouse ? member.spouse.trim() : null;
+
   return (
     <button
       onClick={onClick}
@@ -51,12 +62,19 @@ export const MemberCard: React.FC<MemberCardProps> = ({
       }`}
       title={`Klik untuk melihat detail & silsilah ${member.name}`}
     >
-      {/* Deceased Ribbon if applicable */}
-      {member.isDeceased && (
-        <span className="absolute -top-2 right-2 text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-stone-700 text-stone-200 border border-stone-600 shadow-xs">
-          Wafat
-        </span>
-      )}
+      {/* Top Badges: In-law & Deceased */}
+      <div className="absolute -top-2 right-2 flex items-center gap-1">
+        {member.isInLaw && (
+          <span className="text-[9.5px] font-semibold px-1.5 py-0.5 rounded-full bg-pink-100 dark:bg-pink-950/60 text-pink-700 dark:text-pink-300 border border-pink-200 dark:border-pink-800 shadow-2xs">
+            Menantu
+          </span>
+        )}
+        {member.isDeceased && (
+          <span className="text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-stone-700 text-stone-200 border border-stone-600 shadow-xs">
+            Wafat
+          </span>
+        )}
+      </div>
 
       {/* Avatar or Initials */}
       <div className="relative mb-2">
@@ -99,9 +117,9 @@ export const MemberCard: React.FC<MemberCardProps> = ({
             {lifespan}
           </span>
         )}
-        {member.spouse && (
-          <span className="block text-[10.5px] text-[var(--mute)]/80 italic mt-0.5 truncate" title={`Pasangan: ${member.spouse}`}>
-            & {member.spouse}
+        {!hideSpouseText && fallbackSpouseText && (
+          <span className="block text-[10.5px] text-[var(--mute)]/80 italic mt-0.5 truncate" title={`Pasangan: ${fallbackSpouseText}`}>
+            & {fallbackSpouseText}
           </span>
         )}
       </div>
